@@ -1,0 +1,11 @@
+# API Key 보호
+*.env
+config.py
+
+# Python
+__pycache__/
+*.pyc
+
+# 데이터 파일
+data/
+*.csv
