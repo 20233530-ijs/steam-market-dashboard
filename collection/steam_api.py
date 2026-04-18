@@ -1,20 +1,35 @@
+import os
+import sys
+from pathlib import Path
+
 import requests
+from dotenv import load_dotenv
 
-API_KEY = "KEY"
 
-# 새로운 API 엔드포인트
-url = f"https://api.steampowered.com/IStoreService/GetAppList/v1/?key={API_KEY}&include_games=1&limit=10"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
-print("Steam API 연결 테스트 중...")
 
-response = requests.get(url)
-print(f"상태코드: {response.status_code}")
+def main():
+    env_path = PROJECT_ROOT / ".env"
+    load_dotenv(env_path)
+    api_key = os.getenv("API_KEY")
+    if not api_key:
+        raise RuntimeError("API_KEY is missing from .env.")
 
-if response.status_code == 200:
-    data = response.json()
-    apps = data['response']['apps']
-    print(f"연결 성공! 가져온 게임 수: {len(apps)}개")
+    response = requests.get(
+        "https://api.steampowered.com/IStoreService/GetAppList/v1/",
+        params={"key": api_key, "include_games": 1, "limit": 10},
+        timeout=20,
+    )
+    response.raise_for_status()
+    apps = response.json()["response"]["apps"]
+
+    print(f"Steam API connection successful. Retrieved {len(apps)} games.")
     for app in apps[:5]:
-        print(f"  {app['appid']} - {app['name']}")
-else:
-    print(response.text[:300])
+        print(f"{app['appid']} - {app['name']}")
+
+
+if __name__ == "__main__":
+    main()

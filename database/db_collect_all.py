@@ -1,59 +1,71 @@
 import requests
-import psycopg2
 
-API_KEY = "KEY입력"
+from db_setup_v2 import initialize_database
+from db_utils import get_connection
 
-conn = psycopg2.connect(
-    host="localhost",
-    port=5432,
-    database="postgres",
-    user="postgres",
-    password="SQL비밀번호"
-)
-cursor = conn.cursor()
 
-print("SteamSpy 데이터 수집 중...")
+STEAMSPY_URL = "https://steamspy.com/api.php?request=top100in2weeks"
 
-url = "https://steamspy.com/api.php?request=top100in2weeks"
-response = requests.get(url)
-data = response.json()
 
-count = 0
-for app_id, game in data.items():
-    try:
-        # games 테이블에 저장
-        cursor.execute("""
-            INSERT INTO games (app_id, name, genre, price, tags)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (app_id) DO NOTHING
-        """, (
-            int(app_id),
-            game['name'],
-            game.get('genre', ''),
-            game.get('price', 0),
-            str(game.get('tags', ''))
-        ))
+def collect_all_games():
+    initialize_database()
+    response = requests.get(STEAMSPY_URL, timeout=20)
+    response.raise_for_status()
+    data = response.json()
 
-        # game_stats 테이블에 저장
-        cursor.execute("""
-            INSERT INTO game_stats (app_id, owners, positive_reviews, negative_reviews, average_playtime)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (
-            int(app_id),
-            game.get('owners', ''),
-            game.get('positive', 0),
-            game.get('negative', 0),
-            game.get('average_forever', 0)
-        ))
-        count += 1
+    inserted_count = 0
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            for app_id, game in data.items():
+                try:
+                    cursor.execute(
+                        """
+                        INSERT INTO games (app_id, name, genre, price, tags)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (app_id) DO UPDATE
+                        SET
+                            name = EXCLUDED.name,
+                            genre = EXCLUDED.genre,
+                            price = EXCLUDED.price,
+                            tags = EXCLUDED.tags
+                        """,
+                        (
+                            int(app_id),
+                            game["name"],
+                            game.get("genre", ""),
+                            game.get("price", 0),
+                            str(game.get("tags", "")),
+                        ),
+                    )
 
-    except Exception as e:
-        print(f"에러: {e}")
-        conn.rollback()
-        continue
+                    cursor.execute(
+                        """
+                        INSERT INTO game_stats (
+                            app_id,
+                            owners,
+                            positive_reviews,
+                            negative_reviews,
+                            average_playtime
+                        )
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (
+                            int(app_id),
+                            game.get("owners", ""),
+                            game.get("positive", 0),
+                            game.get("negative", 0),
+                            game.get("average_forever", 0),
+                        ),
+                    )
+                    inserted_count += 1
+                except Exception as exc:
+                    conn.rollback()
+                    print(f"Failed to insert app {app_id}: {exc}")
+                    continue
+        conn.commit()
 
-conn.commit()
-print(f"완료! {count}개 게임 저장됨")
+    print(f"SteamSpy collection complete. Stored {inserted_count} games.")
 
-cursor.close()
-conn.close()
+
+if __name__ == "__main__":
+    collect_all_games()

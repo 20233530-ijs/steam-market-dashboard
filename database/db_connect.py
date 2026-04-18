@@ -1,15 +1,13 @@
-import psycopg2
+from db_utils import get_connection
 
-try:
-    conn = psycopg2.connect(
-        host="localhost",
-        port=5432,
-        database="postgres",
-        user="postgres",
-        password="SQL비밀번호"
-    )
-    print("DB 연결 성공!")
-    conn.close()
+def main():
+    try:
+        conn = get_connection()
+        conn.close()
+        print("DB connection successful.")
+    except Exception as exc:
+        print(f"DB connection failed: {exc}")
 
-except Exception as e:
-    print(f"연결 실패: {e}")
+
+if __name__ == "__main__":
+    main()

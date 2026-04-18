@@ -1,11 +1,14 @@
-# API Key 보호
-*.env
+﻿# API keys and local config
+.env
+venv/
 config.py
 
-# Python
+# Python cache
 __pycache__/
 *.pyc
 
-# 데이터 파일
+# Data artifacts
 data/
 *.csv
+*.pyc
+artifacts/

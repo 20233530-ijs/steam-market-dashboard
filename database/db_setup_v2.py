@@ -1,26 +1,12 @@
-import psycopg2
+from db_utils import get_connection
 
-conn = psycopg2.connect(
-    host="localhost",
-    port=5432,
-    database="postgres",
-    user="postgres",
-    password="SQL비밀번호"
-)
 
-cursor = conn.cursor()
-
-# 기존 테이블 삭제 후 새로 만들기
-cursor.execute("DROP TABLE IF EXISTS reviews")
-cursor.execute("DROP TABLE IF EXISTS games")
-cursor.execute("DROP TABLE IF EXISTS steam_games")
-
-# 1. 게임 기본 정보 테이블
-cursor.execute("""
+CREATE_TABLE_STATEMENTS = [
+    """
     CREATE TABLE IF NOT EXISTS games (
         app_id INTEGER PRIMARY KEY,
         name VARCHAR(200),
-        genre VARCHAR(100),
+        genre VARCHAR(255),
         price INTEGER,
         release_date VARCHAR(50),
         developer VARCHAR(200),
@@ -28,10 +14,8 @@ cursor.execute("""
         languages TEXT,
         tags TEXT
     )
-""")
-
-# 2. 게임 통계 테이블 (흥행 지표)
-cursor.execute("""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS game_stats (
         stat_id SERIAL PRIMARY KEY,
         app_id INTEGER REFERENCES games(app_id),
@@ -42,25 +26,104 @@ cursor.execute("""
         peak_players INTEGER,
         collected_at TIMESTAMP DEFAULT NOW()
     )
-""")
-
-# 3. 리뷰 테이블 (텍스트 마이닝용)
-cursor.execute("""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS reviews (
         review_id SERIAL PRIMARY KEY,
+        steam_review_id BIGINT UNIQUE NOT NULL,
         app_id INTEGER REFERENCES games(app_id),
         review_text TEXT,
         voted_up BOOLEAN,
         playtime_hours INTEGER,
+        language VARCHAR(20) DEFAULT 'english',
         collected_at TIMESTAMP DEFAULT NOW()
     )
-""")
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS cleaned_reviews (
+        review_id INTEGER PRIMARY KEY REFERENCES reviews(review_id) ON DELETE CASCADE,
+        app_id INTEGER REFERENCES games(app_id),
+        raw_text TEXT NOT NULL,
+        clean_text TEXT NOT NULL,
+        tokens JSONB NOT NULL,
+        token_count INTEGER NOT NULL,
+        language VARCHAR(20) DEFAULT 'english',
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS review_sentiments (
+        review_id INTEGER PRIMARY KEY REFERENCES reviews(review_id) ON DELETE CASCADE,
+        app_id INTEGER REFERENCES games(app_id),
+        pos DOUBLE PRECISION NOT NULL,
+        neu DOUBLE PRECISION NOT NULL,
+        neg DOUBLE PRECISION NOT NULL,
+        compound DOUBLE PRECISION NOT NULL,
+        sentiment_label VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS game_topics (
+        topic_result_id SERIAL PRIMARY KEY,
+        app_id INTEGER REFERENCES games(app_id),
+        topic_id INTEGER NOT NULL,
+        topic_keywords TEXT NOT NULL,
+        topic_weight DOUBLE PRECISION NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (app_id, topic_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS game_analysis_features (
+        app_id INTEGER PRIMARY KEY REFERENCES games(app_id),
+        name VARCHAR(200),
+        genre VARCHAR(255),
+        price INTEGER,
+        log_price DOUBLE PRECISION,
+        owners_value DOUBLE PRECISION,
+        review_count INTEGER,
+        positive_review_count INTEGER,
+        negative_review_count INTEGER,
+        average_playtime DOUBLE PRECISION,
+        sentiment_compound_mean DOUBLE PRECISION,
+        sentiment_positive_ratio DOUBLE PRECISION,
+        popularity_score DOUBLE PRECISION,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS correlation_results (
+        correlation_id SERIAL PRIMARY KEY,
+        feature_a VARCHAR(100) NOT NULL,
+        feature_b VARCHAR(100) NOT NULL,
+        correlation DOUBLE PRECISION NOT NULL,
+        p_value DOUBLE PRECISION NOT NULL,
+        sample_size INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (feature_a, feature_b)
+    )
+    """,
+]
 
-conn.commit()
-print("테이블 3개 생성 완료!")
-print("- games: 게임 기본 정보")
-print("- game_stats: 흥행 지표")
-print("- reviews: 리뷰 텍스트")
 
-cursor.close()
-conn.close()
+def initialize_database():
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            for statement in CREATE_TABLE_STATEMENTS:
+                cursor.execute(statement)
+        conn.commit()
+
+    print("Database schema is ready.")
+    print("- games")
+    print("- game_stats")
+    print("- reviews")
+    print("- cleaned_reviews")
+    print("- review_sentiments")
+    print("- game_topics")
+    print("- game_analysis_features")
+    print("- correlation_results")
+
+
+if __name__ == "__main__":
+    initialize_database()

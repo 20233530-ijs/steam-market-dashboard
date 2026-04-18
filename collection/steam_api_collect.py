@@ -1,48 +1,52 @@
+import os
+import sys
+from pathlib import Path
+
 import requests
-import psycopg2
+from dotenv import load_dotenv
 
-API_KEY = "KEY입력"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
-# 1. Steam Web API로 게임 목록 가져오기
-print("Steam Web API 데이터 수집 중...")
-url = f"https://api.steampowered.com/IStoreService/GetAppList/v1/?key={API_KEY}&include_games=1&limit=100"
-response = requests.get(url)
-apps = response.json()['response']['apps']
-print(f"게임 목록 {len(apps)}개 가져옴")
+from database.db_setup_v2 import initialize_database
+from database.db_utils import get_connection
 
-# 2. DB 연결
-conn = psycopg2.connect(
-    host="localhost",
-    port=5432,
-    database="postgres",
-    user="postgres",
-    password="SQL비밀번호"
-)
-cursor = conn.cursor()
 
-# 3. 테이블 생성
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS steam_games (
-        app_id INTEGER PRIMARY KEY,
-        name VARCHAR(200)
+def main():
+    env_path = PROJECT_ROOT / ".env"
+    load_dotenv(env_path)
+    api_key = os.getenv("API_KEY")
+    if not api_key:
+        raise RuntimeError("API_KEY is missing from .env.")
+
+    print("Collecting game list from Steam Web API...")
+    response = requests.get(
+        "https://api.steampowered.com/IStoreService/GetAppList/v1/",
+        params={"key": api_key, "include_games": 1, "limit": 100},
+        timeout=20,
     )
-""")
+    response.raise_for_status()
+    apps = response.json()["response"]["apps"]
+    print(f"Fetched {len(apps)} games.")
 
-# 4. 데이터 저장
-count = 0
-for app in apps:
-    cursor.execute("""
-        INSERT INTO steam_games (app_id, name)
-        VALUES (%s, %s)
-        ON CONFLICT (app_id) DO NOTHING
-    """, (
-        app['appid'],
-        app['name']
-    ))
-    count += 1
+    initialize_database()
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            for app in apps:
+                cursor.execute(
+                    """
+                    INSERT INTO games (app_id, name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (app_id) DO UPDATE
+                    SET name = EXCLUDED.name
+                    """,
+                    (app["appid"], app["name"]),
+                )
+        conn.commit()
 
-conn.commit()
-print(f"DB 저장 완료! {count}개 게임 저장됨")
+    print(f"Stored {len(apps)} games in the database.")
 
-cursor.close()
-conn.close()
+
+if __name__ == "__main__":
+    main()
