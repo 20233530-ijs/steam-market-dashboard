@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steam Market Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div>
+        <p class="eyebrow">Steam analytics</p>
+        <h1>Market Dashboard</h1>
+      </div>
+      <label class="api-field">
+        <span>API URL</span>
+        <input id="apiBaseInput" type="url" value="http://localhost:8000" />
+      </label>
+      <button id="refreshButton" type="button">Refresh</button>
+      <p id="statusText" class="status">Ready</p>
+    </aside>
+
+    <main class="dashboard">
+      <section class="summary-grid" aria-label="Dashboard summary">
+        <article class="metric">
+          <span>Total games</span>
+          <strong id="totalGames">-</strong>
+        </article>
+        <article class="metric">
+          <span>Total reviews</span>
+          <strong id="totalReviews">-</strong>
+        </article>
+        <article class="metric">
+          <span>Avg. positive</span>
+          <strong id="avgPositive">-</strong>
+        </article>
+        <article class="metric">
+          <span>Top genre</span>
+          <strong id="topGenre">-</strong>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <section class="panel games-panel">
+          <div class="panel-head">
+            <h2>Games</h2>
+            <input id="gameSearch" type="search" placeholder="Search games" />
+          </div>
+          <div id="gamesList" class="games-list"></div>
+        </section>
+
+        <section class="panel detail-panel">
+          <div class="panel-head">
+            <h2 id="selectedTitle">Select a game</h2>
+            <span id="selectedGenre" class="pill">No game selected</span>
+          </div>
+
+          <div class="detail-grid">
+            <div>
+              <span>Owners</span>
+              <strong id="detailOwners">-</strong>
+            </div>
+            <div>
+              <span>Price</span>
+              <strong id="detailPrice">-</strong>
+            </div>
+            <div>
+              <span>Positive reviews</span>
+              <strong id="detailPositive">-</strong>
+            </div>
+            <div>
+              <span>Negative reviews</span>
+              <strong id="detailNegative">-</strong>
+            </div>
+          </div>
+
+          <h3>Sentiment</h3>
+          <div id="sentimentBars" class="bars"></div>
+
+          <h3>Topics</h3>
+          <div id="topicList" class="topics"></div>
+        </section>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Top correlations</h2>
+          <span class="muted">Pearson correlation from analysis output</span>
+        </div>
+        <div id="correlationList" class="correlations"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

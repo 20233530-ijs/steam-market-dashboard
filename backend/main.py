@@ -15,7 +15,10 @@ load_dotenv(BACKEND_DIR / ".env")
 
 app = FastAPI(
     title="Steam Market Dashboard API",
-    description="Steam 게임 시장 트렌드 분석 결과를 제공하는 FastAPI 백엔드",
+    description=(
+        "FastAPI backend for Steam market, review sentiment, topic, "
+        "and correlation analysis results."
+    ),
     version="1.0.0",
 )
 
@@ -23,7 +26,7 @@ app = FastAPI(
 def get_allowed_origins() -> list[str]:
     origins = os.getenv(
         "BACKEND_CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:5173",
+        "http://localhost:3000,http://localhost:5173,http://localhost:5500,http://localhost:8080",
     )
     return [origin.strip() for origin in origins.split(",") if origin.strip()]
 

@@ -2,19 +2,22 @@ from fastapi import APIRouter, Depends
 from psycopg2.extensions import connection
 
 from backend.database import get_db
+from backend.schemas.analysis_schema import CorrelationResult
 from backend.schemas.game_schema import DashboardSummary
 
 
 router = APIRouter(tags=["analysis"])
 
 
-@router.get("/analysis/correlation")
+@router.get("/analysis/correlation", response_model=list[CorrelationResult])
 def get_correlation_results(db: connection = Depends(get_db)) -> list[dict]:
     query = """
         SELECT
             feature_a AS feature_x,
             feature_b AS feature_y,
-            correlation AS correlation_value
+            correlation AS correlation_value,
+            p_value,
+            sample_size
         FROM correlation_results
         ORDER BY ABS(correlation) DESC, feature_a ASC, feature_b ASC
     """
@@ -50,4 +53,3 @@ def get_dashboard_summary(db: connection = Depends(get_db)) -> dict:
     with db.cursor() as cursor:
         cursor.execute(query)
         return cursor.fetchone()
-

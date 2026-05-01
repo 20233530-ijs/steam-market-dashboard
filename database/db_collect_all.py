@@ -18,6 +18,7 @@ def collect_all_games():
         with conn.cursor() as cursor:
             for app_id, game in data.items():
                 try:
+                    cursor.execute("SAVEPOINT game_insert")
                     cursor.execute(
                         """
                         INSERT INTO games (app_id, name, genre, price, tags)
@@ -58,8 +59,9 @@ def collect_all_games():
                         ),
                     )
                     inserted_count += 1
+                    cursor.execute("RELEASE SAVEPOINT game_insert")
                 except Exception as exc:
-                    conn.rollback()
+                    cursor.execute("ROLLBACK TO SAVEPOINT game_insert")
                     print(f"Failed to insert app {app_id}: {exc}")
                     continue
         conn.commit()
