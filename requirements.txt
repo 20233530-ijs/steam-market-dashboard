@@ -1,5 +1,8 @@
-﻿requests
+requests
 psycopg2-binary
+python-dotenv
+fastapi
+uvicorn
 apscheduler
 pandas
 numpy
