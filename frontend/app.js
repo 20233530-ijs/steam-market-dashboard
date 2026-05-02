@@ -5,230 +5,110 @@ const state = {
 
 const elements = {
   apiBaseInput: document.querySelector("#apiBaseInput"),
-  refreshButton: document.querySelector("#refreshButton"),
-  statusText: document.querySelector("#statusText"),
-  totalGames: document.querySelector("#totalGames"),
-  totalReviews: document.querySelector("#totalReviews"),
-  avgPositive: document.querySelector("#avgPositive"),
-  topGenre: document.querySelector("#topGenre"),
-  gameSearch: document.querySelector("#gameSearch"),
-  gamesList: document.querySelector("#gamesList"),
-  selectedTitle: document.querySelector("#selectedTitle"),
-  selectedGenre: document.querySelector("#selectedGenre"),
-  detailOwners: document.querySelector("#detailOwners"),
-  detailPrice: document.querySelector("#detailPrice"),
-  detailPositive: document.querySelector("#detailPositive"),
-  detailNegative: document.querySelector("#detailNegative"),
-  sentimentBars: document.querySelector("#sentimentBars"),
-  topicList: document.querySelector("#topicList"),
-  correlationList: document.querySelector("#correlationList"),
+  loadButton: document.querySelector("#loadButton"),
+  statusMessage: document.querySelector("#statusMessage"),
+  gameSearchInput: document.querySelector("#gameSearchInput"),
+  gamesContainer: document.querySelector("#gamesContainer"),
+  selectedGameBadge: document.querySelector("#selectedGameBadge"),
+  gameDetailContainer: document.querySelector("#gameDetailContainer"),
+  sentimentContainer: document.querySelector("#sentimentContainer"),
+  topicsContainer: document.querySelector("#topicsContainer"),
+  correlationContainer: document.querySelector("#correlationContainer"),
+  logList: document.querySelector("#logList"),
 };
 
 function getApiBase() {
-  return elements.apiBaseInput.value.replace(/\/+$/, "");
+  return elements.apiBaseInput.value.trim().replace(/\/+$/, "");
 }
 
-function setStatus(message) {
-  elements.statusText.textContent = message;
+function setStatus(message, isError = false) {
+  elements.statusMessage.textContent = message;
+  elements.statusMessage.classList.toggle("error", isError);
 }
 
-function formatInteger(value) {
-  return Number(value || 0).toLocaleString();
+function logResult(label, payload, isError = false) {
+  const item = document.createElement("li");
+  item.textContent = `${label}: ${isError ? "실패" : "성공"}`;
+  elements.logList.appendChild(item);
+  console[isError ? "error" : "log"](`[${label}]`, payload);
 }
 
-function formatPercent(value) {
-  return `${Math.round(Number(value || 0) * 100)}%`;
+function resetLog() {
+  elements.logList.innerHTML = "";
 }
 
-function formatPrice(value) {
-  const cents = Number(value || 0);
-  if (cents === 0) {
-    return "Free";
-  }
-  return `$${(cents / 100).toFixed(2)}`;
-}
+async function requestJson(path, label) {
+  const url = `${getApiBase()}${path}`;
+  const response = await fetch(url);
 
-async function request(path) {
-  const response = await fetch(`${getApiBase()}${path}`);
   if (!response.ok) {
-    throw new Error(`${path} returned ${response.status}`);
-  }
-  return response.json();
-}
-
-function renderSummary(summary) {
-  elements.totalGames.textContent = formatInteger(summary.total_games);
-  elements.totalReviews.textContent = formatInteger(summary.total_reviews);
-  elements.avgPositive.textContent = formatPercent(summary.average_positive_ratio);
-  elements.topGenre.textContent = summary.top_genre || "-";
-}
-
-function renderGames() {
-  const term = elements.gameSearch.value.trim().toLowerCase();
-  const games = state.games.filter((game) => {
-    return !term || `${game.name || ""} ${game.genre || ""}`.toLowerCase().includes(term);
-  });
-
-  if (games.length === 0) {
-    elements.gamesList.innerHTML = '<div class="empty">No games found</div>';
-    return;
+    throw new Error(`${label} 요청 실패 (${response.status})`);
   }
 
-  elements.gamesList.innerHTML = games
-    .map((game) => {
-      const active = game.game_id === state.selectedGameId ? " active" : "";
-      return `
-        <button class="game-row${active}" type="button" data-game-id="${game.game_id}">
-          <span>
-            <strong>${escapeHtml(game.name || "Untitled")}</strong><br />
-            ${escapeHtml(game.genre || "Unknown genre")}
-          </span>
-          <span>${formatInteger(game.positive_reviews)} / ${formatInteger(game.negative_reviews)}</span>
-        </button>
-      `;
-    })
-    .join("");
+  const data = await response.json();
+  logResult(`${label} ${path}`, data);
+  return data;
 }
 
-function renderSentiment(sentiment) {
-  const rows = [
-    ["Positive", sentiment.positive_ratio, sentiment.positive_count, ""],
-    ["Neutral", sentiment.neutral_ratio, sentiment.neutral_count, "neutral"],
-    ["Negative", sentiment.negative_ratio, sentiment.negative_count, "negative"],
-  ];
-
-  elements.sentimentBars.innerHTML = rows
-    .map(([label, ratio, count, className]) => {
-      const width = Math.max(0, Math.min(100, Number(ratio || 0) * 100));
-      return `
-        <div class="bar-row">
-          <div class="bar-label">
-            <strong>${label}</strong>
-            <span>${formatPercent(ratio)} (${formatInteger(count)})</span>
-          </div>
-          <div class="bar-track"><div class="bar-fill ${className}" style="width: ${width}%"></div></div>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-function renderTopics(topics) {
-  if (!topics.length) {
-    elements.topicList.innerHTML = '<div class="empty">No topic data</div>';
-    return;
+// Some backend routes may not exist yet. Keep each request isolated so one failure
+// does not stop the rest of the dashboard from rendering.
+async function requestOptional(path, label) {
+  try {
+    return await requestJson(path, label);
+  } catch (error) {
+    logResult(`${label} ${path}`, error, true);
+    return null;
   }
-
-  elements.topicList.innerHTML = topics
-    .map((topic) => {
-      return `
-        <div class="topic-row">
-          <strong>Topic ${topic.topic_id}</strong>
-          <span>${escapeHtml(topic.keywords)}</span>
-        </div>
-      `;
-    })
-    .join("");
 }
 
-function renderCorrelations(correlations) {
-  if (!correlations.length) {
-    elements.correlationList.innerHTML = '<div class="empty">No correlation data</div>';
-    return;
+function asArray(value) {
+  if (Array.isArray(value)) {
+    return value;
   }
-
-  elements.correlationList.innerHTML = correlations
-    .slice(0, 12)
-    .map((item) => {
-      return `
-        <div class="correlation-row">
-          <strong>${escapeHtml(item.feature_x)} vs ${escapeHtml(item.feature_y)}</strong>
-          <div class="correlation-meta">
-            <span>r=${Number(item.correlation_value).toFixed(3)}</span>
-            <span>p=${Number(item.p_value).toFixed(3)} | n=${formatInteger(item.sample_size)}</span>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  if (Array.isArray(value?.items)) {
+    return value.items;
+  }
+  if (Array.isArray(value?.results)) {
+    return value.results;
+  }
+  if (Array.isArray(value?.data)) {
+    return value.data;
+  }
+  return value ? [value] : [];
 }
 
-function renderSelectedGame(detail) {
-  elements.selectedTitle.textContent = detail.name || `Game ${detail.game_id}`;
-  elements.selectedGenre.textContent = detail.genre || "Unknown genre";
-  elements.detailOwners.textContent = detail.owners || "-";
-  elements.detailPrice.textContent = formatPrice(detail.price);
-  elements.detailPositive.textContent = formatInteger(detail.positive_reviews);
-  elements.detailNegative.textContent = formatInteger(detail.negative_reviews);
+function pick(object, keys, fallback = "-") {
+  for (const key of keys) {
+    const value = object?.[key];
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+  return fallback;
 }
 
-function renderEmptySelection() {
-  elements.selectedTitle.textContent = "Select a game";
-  elements.selectedGenre.textContent = "No game selected";
-  elements.detailOwners.textContent = "-";
-  elements.detailPrice.textContent = "-";
-  elements.detailPositive.textContent = "-";
-  elements.detailNegative.textContent = "-";
-  elements.sentimentBars.innerHTML = '<div class="empty">Choose a game to load sentiment</div>';
-  elements.topicList.innerHTML = '<div class="empty">Choose a game to load topics</div>';
+function getGameId(game) {
+  return pick(game, ["app_id", "game_id", "id"], null);
 }
 
-async function selectGame(gameId) {
-  state.selectedGameId = gameId;
-  renderGames();
-  setStatus("Loading game detail...");
-
-  const [detail, sentimentResult, topicResult] = await Promise.allSettled([
-    request(`/games/${gameId}`),
-    request(`/games/${gameId}/sentiment`),
-    request(`/games/${gameId}/topics`),
-  ]);
-
-  if (detail.status === "fulfilled") {
-    renderSelectedGame(detail.value);
+function formatNumber(value) {
+  if (value === "-" || value === null || value === undefined || value === "") {
+    return "-";
   }
-
-  if (sentimentResult.status === "fulfilled") {
-    renderSentiment(sentimentResult.value);
-  } else {
-    elements.sentimentBars.innerHTML = '<div class="empty">No sentiment data</div>';
-  }
-
-  if (topicResult.status === "fulfilled") {
-    renderTopics(topicResult.value);
-  } else {
-    elements.topicList.innerHTML = '<div class="empty">No topic data</div>';
-  }
-
-  setStatus("Ready");
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString() : String(value);
 }
 
-async function loadDashboard() {
-  setStatus("Loading dashboard...");
-  localStorage.setItem("steamDashboardApiBase", getApiBase());
-  renderEmptySelection();
-
-  const [summary, games, correlations] = await Promise.all([
-    request("/dashboard/summary"),
-    request("/games"),
-    request("/analysis/correlation"),
-  ]);
-
-  state.games = games;
-  state.selectedGameId = games[0]?.game_id || null;
-  renderSummary(summary);
-  renderGames();
-  renderCorrelations(correlations);
-
-  if (state.selectedGameId) {
-    await selectGame(state.selectedGameId);
-  } else {
-    setStatus("No games available");
+function formatRatio(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return "-";
   }
+  return `${Math.round(number * 100)}%`;
 }
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "-")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -236,23 +116,307 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-elements.refreshButton.addEventListener("click", () => {
-  loadDashboard().catch((error) => setStatus(error.message));
-});
+function renderError(container, message) {
+  container.innerHTML = `<div class="error-box">${escapeHtml(message)}</div>`;
+}
 
-elements.gameSearch.addEventListener("input", renderGames);
+function renderGames() {
+  const searchTerm = elements.gameSearchInput.value.trim().toLowerCase();
+  const filteredGames = state.games.filter((game) => {
+    const name = pick(game, ["name", "title"], "");
+    const genre = pick(game, ["genre", "genres"], "");
+    return `${name} ${genre}`.toLowerCase().includes(searchTerm);
+  });
 
-elements.gamesList.addEventListener("click", (event) => {
+  if (filteredGames.length === 0) {
+    elements.gamesContainer.innerHTML = '<p class="empty-message">표시할 게임 목록이 없습니다.</p>';
+    return;
+  }
+
+  const rows = filteredGames
+    .map((game) => {
+      const gameId = getGameId(game);
+      const name = pick(game, ["name", "title"]);
+      const genre = pick(game, ["genre", "genres"]);
+      const positive = formatNumber(pick(game, ["positive_reviews", "positive", "positive_count"]));
+      const negative = formatNumber(pick(game, ["negative_reviews", "negative", "negative_count"]));
+      const active = String(gameId) === String(state.selectedGameId) ? " active" : "";
+
+      return `
+        <tr>
+          <td>
+            <button class="game-button${active}" type="button" data-game-id="${escapeHtml(gameId)}">
+              ${escapeHtml(name)}
+            </button>
+          </td>
+          <td>${escapeHtml(genre)}</td>
+          <td>${positive}</td>
+          <td>${negative}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  elements.gamesContainer.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>게임</th>
+          <th>장르</th>
+          <th>긍정 리뷰</th>
+          <th>부정 리뷰</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function renderGameDetail(detail) {
+  if (!detail) {
+    elements.selectedGameBadge.textContent = "선택 없음";
+    elements.gameDetailContainer.innerHTML =
+      '<p class="empty-message">게임 목록에서 게임을 선택하면 상세 정보가 표시됩니다.</p>';
+    return;
+  }
+
+  const name = pick(detail, ["name", "title"]);
+  elements.selectedGameBadge.textContent = name;
+
+  const fields = [
+    ["App ID", pick(detail, ["app_id", "game_id", "id"])],
+    ["장르", pick(detail, ["genre", "genres"])],
+    ["가격", pick(detail, ["price", "initial_price"])],
+    ["보유자", pick(detail, ["owners", "owner_count"])],
+    ["긍정 리뷰", pick(detail, ["positive_reviews", "positive", "positive_count"])],
+    ["부정 리뷰", pick(detail, ["negative_reviews", "negative", "negative_count"])],
+    ["평균 플레이타임", pick(detail, ["average_playtime", "playtime_average"])],
+    ["개발사", pick(detail, ["developer", "developers"])],
+  ];
+
+  elements.gameDetailContainer.innerHTML = fields
+    .map(
+      ([label, value]) => `
+        <div class="detail-item">
+          <span class="detail-label">${escapeHtml(label)}</span>
+          <span class="detail-value">${escapeHtml(formatNumber(value))}</span>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function normalizeSentiment(data) {
+  const rows = asArray(data);
+  if (rows.length > 1) {
+    const total = rows.reduce((sum, row) => sum + Number(pick(row, ["count", "value"], 0)), 0);
+    return rows.map((row) => {
+      const label = pick(row, ["label", "sentiment", "sentiment_label"]);
+      const count = Number(pick(row, ["count", "value"], 0));
+      return { label, ratio: total > 0 ? count / total : 0, count };
+    });
+  }
+
+  const source = rows[0] || data || {};
+  return [
+    {
+      label: "positive",
+      ratio: pick(source, ["positive_ratio"], 0),
+      count: pick(source, ["positive_count", "positive"], 0),
+    },
+    {
+      label: "neutral",
+      ratio: pick(source, ["neutral_ratio"], 0),
+      count: pick(source, ["neutral_count", "neutral"], 0),
+    },
+    {
+      label: "negative",
+      ratio: pick(source, ["negative_ratio"], 0),
+      count: pick(source, ["negative_count", "negative"], 0),
+    },
+  ];
+}
+
+function renderSentiment(data) {
+  if (!data) {
+    elements.sentimentContainer.innerHTML = '<p class="empty-message">감성 분석 데이터가 없습니다.</p>';
+    return;
+  }
+
+  const rows = normalizeSentiment(data);
+  elements.sentimentContainer.innerHTML = rows
+    .map((row) => {
+      const label = String(row.label || "-");
+      const ratio = Number(row.ratio || 0);
+      const width = Math.max(0, Math.min(100, ratio * 100));
+      const className = label.includes("neg") ? "negative" : label.includes("neu") ? "neutral" : "";
+
+      return `
+        <div class="bar-row">
+          <div class="bar-label">
+            <strong>${escapeHtml(label)}</strong>
+            <span>${formatRatio(ratio)} / ${formatNumber(row.count)}</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill ${className}" style="width: ${width}%"></div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderTopics(data) {
+  const topics = asArray(data);
+  if (topics.length === 0) {
+    elements.topicsContainer.innerHTML = '<p class="empty-message">토픽 데이터가 없습니다.</p>';
+    return;
+  }
+
+  elements.topicsContainer.innerHTML = topics
+    .map((topic, index) => {
+      const topicId = pick(topic, ["topic_id", "id"], index + 1);
+      const keywords = pick(topic, ["keywords", "topic_keywords", "terms", "name"]);
+      const weight = pick(topic, ["weight", "topic_weight", "score"], "-");
+
+      return `
+        <article class="topic-item">
+          <strong class="topic-title">Topic ${escapeHtml(topicId)} · weight ${escapeHtml(formatNumber(weight))}</strong>
+          <span>${escapeHtml(keywords)}</span>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderCorrelations(data) {
+  const rows = asArray(data);
+  if (rows.length === 0) {
+    elements.correlationContainer.innerHTML = '<p class="empty-message">상관분석 결과가 없습니다.</p>';
+    return;
+  }
+
+  const tableRows = rows
+    .map((row) => {
+      const featureA = pick(row, ["feature_x", "feature_a", "x"]);
+      const featureB = pick(row, ["feature_y", "feature_b", "y"]);
+      const correlation = pick(row, ["correlation", "correlation_value", "value"]);
+      const pValue = pick(row, ["p_value", "p"]);
+      const sampleSize = pick(row, ["sample_size", "n", "count"]);
+
+      return `
+        <tr>
+          <td>${escapeHtml(featureA)}</td>
+          <td>${escapeHtml(featureB)}</td>
+          <td>${escapeHtml(formatNumber(correlation))}</td>
+          <td>${escapeHtml(formatNumber(pValue))}</td>
+          <td>${escapeHtml(formatNumber(sampleSize))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  elements.correlationContainer.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Feature A</th>
+          <th>Feature B</th>
+          <th>Correlation</th>
+          <th>p-value</th>
+          <th>Sample size</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  `;
+}
+
+async function loadGames() {
+  const games = await requestJson("/games", "게임 목록");
+  state.games = asArray(games);
+  renderGames();
+  return state.games;
+}
+
+async function loadGameDetail(gameId) {
+  state.selectedGameId = gameId;
+  renderGames();
+
+  const detail = await requestOptional(`/games/${gameId}`, "게임 상세");
+  if (detail) {
+    renderGameDetail(detail);
+  } else {
+    renderError(elements.gameDetailContainer, "게임 상세 정보를 불러오지 못했습니다.");
+  }
+
+  const sentiment = await requestOptional(`/games/${gameId}/sentiment`, "게임별 감성 분석");
+  if (sentiment) {
+    renderSentiment(sentiment);
+  }
+
+  const topics = await requestOptional(`/games/${gameId}/topics`, "게임별 주요 토픽");
+  if (topics) {
+    renderTopics(topics);
+  }
+}
+
+async function loadDashboard() {
+  resetLog();
+  setStatus("데이터를 불러오는 중입니다...");
+  elements.loadButton.disabled = true;
+  localStorage.setItem("steamTrendApiBase", getApiBase());
+
+  try {
+    const games = await loadGames();
+    const sentiment = await requestOptional("/analysis/sentiment", "전체 감성 분석");
+    const topics = await requestOptional("/analysis/topics", "전체 주요 토픽");
+    const correlations = await requestOptional("/analysis/correlation", "상관분석");
+
+    if (sentiment) {
+      renderSentiment(sentiment);
+    } else {
+      elements.sentimentContainer.innerHTML =
+        '<p class="empty-message">전체 감성 분석 API가 없거나 응답이 없습니다. 게임을 선택하면 게임별 감성을 시도합니다.</p>';
+    }
+
+    if (topics) {
+      renderTopics(topics);
+    } else {
+      elements.topicsContainer.innerHTML =
+        '<p class="empty-message">전체 토픽 API가 없거나 응답이 없습니다. 게임을 선택하면 게임별 토픽을 시도합니다.</p>';
+    }
+
+    renderCorrelations(correlations);
+
+    if (games.length > 0) {
+      await loadGameDetail(getGameId(games[0]));
+    } else {
+      renderGameDetail(null);
+    }
+
+    setStatus("데이터 불러오기가 완료되었습니다.");
+  } catch (error) {
+    console.error("[대시보드 로드 실패]", error);
+    setStatus(error.message || "데이터를 불러오지 못했습니다.", true);
+  } finally {
+    elements.loadButton.disabled = false;
+  }
+}
+
+elements.loadButton.addEventListener("click", loadDashboard);
+
+elements.gameSearchInput.addEventListener("input", renderGames);
+
+elements.gamesContainer.addEventListener("click", (event) => {
   const button = event.target.closest("[data-game-id]");
   if (!button) {
     return;
   }
-  selectGame(Number(button.dataset.gameId)).catch((error) => setStatus(error.message));
+  loadGameDetail(button.dataset.gameId);
 });
 
-const savedApiBase = localStorage.getItem("steamDashboardApiBase");
+const savedApiBase = localStorage.getItem("steamTrendApiBase");
 if (savedApiBase) {
   elements.apiBaseInput.value = savedApiBase;
 }
-
-loadDashboard().catch((error) => setStatus(error.message));

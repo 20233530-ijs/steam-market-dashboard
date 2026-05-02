@@ -1,93 +1,87 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Steam Market Dashboard</title>
+    <title>Steam 게임 트렌드 분석 대시보드</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <aside class="sidebar">
+    <header class="app-header">
       <div>
-        <p class="eyebrow">Steam analytics</p>
-        <h1>Market Dashboard</h1>
+        <p class="eyebrow">Steam Market Analytics</p>
+        <h1>Steam 게임 트렌드 분석 대시보드</h1>
       </div>
-      <label class="api-field">
-        <span>API URL</span>
-        <input id="apiBaseInput" type="url" value="http://localhost:8000" />
-      </label>
-      <button id="refreshButton" type="button">Refresh</button>
-      <p id="statusText" class="status">Ready</p>
-    </aside>
+
+      <div class="api-controls">
+        <label for="apiBaseInput">API 서버 주소</label>
+        <div class="control-row">
+          <input id="apiBaseInput" type="url" value="http://localhost:8000" />
+          <button id="loadButton" type="button">데이터 불러오기</button>
+        </div>
+        <p id="statusMessage" class="status-message">API 주소를 확인한 뒤 데이터를 불러오세요.</p>
+      </div>
+    </header>
 
     <main class="dashboard">
-      <section class="summary-grid" aria-label="Dashboard summary">
-        <article class="metric">
-          <span>Total games</span>
-          <strong id="totalGames">-</strong>
-        </article>
-        <article class="metric">
-          <span>Total reviews</span>
-          <strong id="totalReviews">-</strong>
-        </article>
-        <article class="metric">
-          <span>Avg. positive</span>
-          <strong id="avgPositive">-</strong>
-        </article>
-        <article class="metric">
-          <span>Top genre</span>
-          <strong id="topGenre">-</strong>
-        </article>
-      </section>
-
-      <section class="content-grid">
-        <section class="panel games-panel">
-          <div class="panel-head">
-            <h2>Games</h2>
-            <input id="gameSearch" type="search" placeholder="Search games" />
-          </div>
-          <div id="gamesList" class="games-list"></div>
-        </section>
-
-        <section class="panel detail-panel">
-          <div class="panel-head">
-            <h2 id="selectedTitle">Select a game</h2>
-            <span id="selectedGenre" class="pill">No game selected</span>
-          </div>
-
-          <div class="detail-grid">
-            <div>
-              <span>Owners</span>
-              <strong id="detailOwners">-</strong>
-            </div>
-            <div>
-              <span>Price</span>
-              <strong id="detailPrice">-</strong>
-            </div>
-            <div>
-              <span>Positive reviews</span>
-              <strong id="detailPositive">-</strong>
-            </div>
-            <div>
-              <span>Negative reviews</span>
-              <strong id="detailNegative">-</strong>
-            </div>
-          </div>
-
-          <h3>Sentiment</h3>
-          <div id="sentimentBars" class="bars"></div>
-
-          <h3>Topics</h3>
-          <div id="topicList" class="topics"></div>
-        </section>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Top correlations</h2>
-          <span class="muted">Pearson correlation from analysis output</span>
+      <section class="card games-card">
+        <div class="card-header">
+          <h2>게임 목록</h2>
+          <input id="gameSearchInput" type="search" placeholder="게임명 또는 장르 검색" />
         </div>
-        <div id="correlationList" class="correlations"></div>
+        <div id="gamesContainer" class="table-wrap">
+          <p class="empty-message">아직 게임 목록을 불러오지 않았습니다.</p>
+        </div>
+      </section>
+
+      <section class="card detail-card">
+        <div class="card-header">
+          <h2>선택한 게임 상세 정보</h2>
+          <span id="selectedGameBadge" class="badge">선택 없음</span>
+        </div>
+        <div id="gameDetailContainer" class="detail-grid">
+          <p class="empty-message">게임 목록에서 게임을 선택하면 상세 정보가 표시됩니다.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>감성 분석 비율</h2>
+          <span class="card-note">/analysis/sentiment 또는 게임별 sentiment 응답</span>
+        </div>
+        <div id="sentimentContainer" class="bars">
+          <p class="empty-message">감성 분석 데이터가 없습니다.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>주요 토픽</h2>
+          <span class="card-note">/analysis/topics 또는 게임별 topics 응답</span>
+        </div>
+        <div id="topicsContainer" class="topic-list">
+          <p class="empty-message">토픽 데이터가 없습니다.</p>
+        </div>
+      </section>
+
+      <section class="card wide-card">
+        <div class="card-header">
+          <h2>상관분석 결과</h2>
+          <span class="card-note">correlation, p_value, sample_size 표시</span>
+        </div>
+        <div id="correlationContainer" class="table-wrap">
+          <p class="empty-message">상관분석 결과가 없습니다.</p>
+        </div>
+      </section>
+
+      <section class="card wide-card">
+        <div class="card-header">
+          <h2>연결 로그</h2>
+          <span class="card-note">API별 성공/실패 상태</span>
+        </div>
+        <ul id="logList" class="log-list">
+          <li>대기 중입니다.</li>
+        </ul>
       </section>
     </main>
 

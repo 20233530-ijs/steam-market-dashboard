@@ -22,19 +22,29 @@ app = FastAPI(
     version="1.0.0",
 )
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5500",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5500",
+    "http://127.0.0.1:8080",
+    "null",
+]
+
 
 def get_allowed_origins() -> list[str]:
-    origins = os.getenv(
-        "BACKEND_CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:5173,http://localhost:5500,http://localhost:8080",
-    )
-    return [origin.strip() for origin in origins.split(",") if origin.strip()]
+    env_origins = os.getenv("BACKEND_CORS_ORIGINS", "")
+    configured_origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+    return sorted(set(DEFAULT_CORS_ORIGINS + configured_origins))
 
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

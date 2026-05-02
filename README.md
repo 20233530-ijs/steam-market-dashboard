@@ -10,6 +10,30 @@ Steam Market Dashboard collects Steam game market data, gathers recent reviews, 
 - `frontend/`: static dashboard that reads from the FastAPI API.
 - `artifacts/`: generated CSV and PNG analysis outputs.
 
+## Setup
+
+Create a `.env` file in the project root:
+
+```env
+API_KEY=your_steam_web_api_key
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=your_postgres_password
+
+```
+
+Install Python dependencies:
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+python -m nltk.downloader vader_lexicon
+```
+
 ## Data Pipeline
 
 The official pipeline entrypoint is `database/run_analysis_pipeline.py`.
