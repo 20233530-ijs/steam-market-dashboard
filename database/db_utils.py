@@ -3,6 +3,8 @@ from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -27,6 +29,22 @@ def get_db_config():
 
 def get_connection():
     return psycopg2.connect(**get_db_config())
+
+
+def get_database_url():
+    config = get_db_config()
+    return URL.create(
+        drivername="postgresql+psycopg2",
+        username=config["user"],
+        password=config["password"],
+        host=config["host"],
+        port=config["port"],
+        database=config["database"],
+    )
+
+
+def get_engine():
+    return create_engine(get_database_url())
 
 
 def ensure_artifacts_dir():

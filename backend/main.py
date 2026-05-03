@@ -55,6 +55,11 @@ def health_check() -> dict:
     return {"status": "ok", "message": "Steam Market Dashboard API is running"}
 
 
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
 app.include_router(games.router)
 app.include_router(sentiment.router)
 app.include_router(topics.router)

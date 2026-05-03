@@ -24,7 +24,9 @@ def collect_data():
     try:
         run_pipeline(
             limit=None,
-            max_pages=3,
+            game_limit=200,
+            steam_web_api_limit=200,
+            max_pages=10,
             page_size=100,
             replace_existing=False,
         )

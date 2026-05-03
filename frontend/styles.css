@@ -128,6 +128,28 @@ button:disabled {
   opacity: 0.64;
 }
 
+.pagination {
+  margin: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pagination-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pagination-buttons button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 .status-message {
   min-height: 18px;
   margin: 10px 0 0;
@@ -331,6 +353,16 @@ td {
   border-radius: 6px;
   color: #ffd6d6;
   background: rgba(255, 107, 107, 0.1);
+}
+
+.warning-box {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 193, 74, 0.52);
+  border-radius: 6px;
+  color: #ffe6a6;
+  background: rgba(248, 193, 74, 0.12);
+  font-size: 13px;
 }
 
 .log-list {

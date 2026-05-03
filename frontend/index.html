@@ -3,84 +3,84 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Steam 게임 트렌드 분석 대시보드</title>
+    <title>Steam Game Trend Dashboard</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="app-header">
       <div>
         <p class="eyebrow">Steam Market Analytics</p>
-        <h1>Steam 게임 트렌드 분석 대시보드</h1>
+        <h1>Steam Game Trend Dashboard</h1>
       </div>
 
       <div class="api-controls">
-        <label for="apiBaseInput">API 서버 주소</label>
+        <label for="apiBaseInput">API server URL</label>
         <div class="control-row">
           <input id="apiBaseInput" type="url" value="http://localhost:8000" />
-          <button id="loadButton" type="button">데이터 불러오기</button>
+          <button id="loadButton" type="button">Load Data</button>
         </div>
-        <p id="statusMessage" class="status-message">API 주소를 확인한 뒤 데이터를 불러오세요.</p>
+        <p id="statusMessage" class="status-message">Start the FastAPI backend, then load data.</p>
       </div>
     </header>
 
     <main class="dashboard">
       <section class="card games-card">
         <div class="card-header">
-          <h2>게임 목록</h2>
-          <input id="gameSearchInput" type="search" placeholder="게임명 또는 장르 검색" />
+          <h2>Game List</h2>
+          <input id="gameSearchInput" type="search" placeholder="Search by game or genre" />
         </div>
         <div id="gamesContainer" class="table-wrap">
-          <p class="empty-message">아직 게임 목록을 불러오지 않았습니다.</p>
+          <p class="empty-message">No game list loaded yet.</p>
         </div>
       </section>
 
       <section class="card detail-card">
         <div class="card-header">
-          <h2>선택한 게임 상세 정보</h2>
-          <span id="selectedGameBadge" class="badge">선택 없음</span>
+          <h2>Selected Game Detail</h2>
+          <span id="selectedGameBadge" class="badge">No selection</span>
         </div>
         <div id="gameDetailContainer" class="detail-grid">
-          <p class="empty-message">게임 목록에서 게임을 선택하면 상세 정보가 표시됩니다.</p>
+          <p class="empty-message">Select a game to view details.</p>
         </div>
       </section>
 
       <section class="card">
         <div class="card-header">
-          <h2>감성 분석 비율</h2>
-          <span class="card-note">/analysis/sentiment 또는 게임별 sentiment 응답</span>
+          <h2>Sentiment Ratio</h2>
+          <span id="sentimentReliability" class="badge">Reliability -</span>
         </div>
         <div id="sentimentContainer" class="bars">
-          <p class="empty-message">감성 분석 데이터가 없습니다.</p>
+          <p class="empty-message">No sentiment data loaded yet.</p>
         </div>
       </section>
 
       <section class="card">
         <div class="card-header">
-          <h2>주요 토픽</h2>
-          <span class="card-note">/analysis/topics 또는 게임별 topics 응답</span>
+          <h2>Top Topics</h2>
+          <span class="card-note">Top 5 topics</span>
         </div>
         <div id="topicsContainer" class="topic-list">
-          <p class="empty-message">토픽 데이터가 없습니다.</p>
+          <p class="empty-message">No topic data loaded yet.</p>
         </div>
       </section>
 
       <section class="card wide-card">
         <div class="card-header">
-          <h2>상관분석 결과</h2>
-          <span class="card-note">correlation, p_value, sample_size 표시</span>
+          <h2>Correlation Results</h2>
+          <span class="card-note">Reliability is based on sample_size.</span>
         </div>
         <div id="correlationContainer" class="table-wrap">
-          <p class="empty-message">상관분석 결과가 없습니다.</p>
+          <p class="empty-message">No correlation data loaded yet.</p>
         </div>
       </section>
 
       <section class="card wide-card">
         <div class="card-header">
-          <h2>연결 로그</h2>
-          <span class="card-note">API별 성공/실패 상태</span>
+          <h2>Connection Log</h2>
+          <span class="card-note">API responses are also printed with console.log.</span>
         </div>
         <ul id="logList" class="log-list">
-          <li>대기 중입니다.</li>
+          <li>Waiting.</li>
         </ul>
       </section>
     </main>

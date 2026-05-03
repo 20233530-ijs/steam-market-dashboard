@@ -8,6 +8,7 @@ class ApiSmokeTests(unittest.TestCase):
         routes = {route.path for route in app.routes}
 
         self.assertIn("/", routes)
+        self.assertIn("/health", routes)
 
     def test_correlation_route_has_response_model_fields(self):
         schema = app.openapi()
@@ -21,6 +22,12 @@ class ApiSmokeTests(unittest.TestCase):
         self.assertTrue(
             {"feature_x", "feature_y", "correlation_value", "p_value", "sample_size"}.issubset(properties)
         )
+
+    def test_analysis_overview_routes_are_registered(self):
+        routes = {route.path for route in app.routes}
+
+        self.assertIn("/analysis/sentiment", routes)
+        self.assertIn("/analysis/topics", routes)
 
 
 if __name__ == "__main__":

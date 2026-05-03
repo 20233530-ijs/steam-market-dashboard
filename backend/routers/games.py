@@ -33,7 +33,10 @@ def get_games(db: connection = Depends(get_db)) -> list[dict]:
             COALESCE(ls.negative_reviews, 0) AS negative_reviews
         FROM games g
         LEFT JOIN latest_stats ls ON g.app_id = ls.app_id
-        ORDER BY g.name ASC
+        ORDER BY
+            (ls.app_id IS NOT NULL) DESC,
+            COALESCE(ls.positive_reviews, 0) + COALESCE(ls.negative_reviews, 0) DESC,
+            g.name ASC
     """
     with db.cursor() as cursor:
         cursor.execute(query)
@@ -84,4 +87,3 @@ def get_game_detail(game_id: int, db: connection = Depends(get_db)) -> dict:
         raise HTTPException(status_code=404, detail="Game not found")
 
     return game
-
