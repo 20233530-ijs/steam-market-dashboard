@@ -117,6 +117,14 @@ function formatOwners(value) {
   return owners === "-" ? "-" : `${owners} users`;
 }
 
+function formatPlaytime(value) {
+  if (value === "-" || value === null || value === undefined || value === "") return "-";
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes <= 0) return "-";
+  if (minutes >= 60) return `${(minutes / 60).toLocaleString(undefined, { maximumFractionDigits: 1 })} h`;
+  return `${Math.round(minutes).toLocaleString()} min`;
+}
+
 function hasMarketData(game) {
   return (
     pick(game, ["owners", "owner_count"], null) !== null ||
@@ -185,6 +193,7 @@ function renderGames() {
           <td>${escapeHtml(pick(game, ["genre", "genres"]))}</td>
           <td>${formatCurrency(pick(game, ["price", "initial_price"]))}</td>
           <td>${formatOwners(pick(game, ["owners", "owner_count"]))}</td>
+          <td>${formatPlaytime(pick(game, ["average_playtime", "playtime_average"]))}</td>
           <td>${formatNumber(pick(game, ["positive_reviews", "positive", "positive_count"]))}</td>
           <td>${formatNumber(pick(game, ["negative_reviews", "negative", "negative_count"]))}</td>
           <td>${dataStatus}</td>
@@ -196,7 +205,7 @@ function renderGames() {
   elements.gamesContainer.innerHTML = `
     ${renderPagination(games.length)}
     <table>
-      <thead><tr><th>Game</th><th>Genre</th><th>Price</th><th>Owners</th><th>Positive</th><th>Negative</th><th>Status</th></tr></thead>
+      <thead><tr><th>Game</th><th>Genre</th><th>Price</th><th>Owners</th><th>Avg Playtime</th><th>Positive</th><th>Negative</th><th>Status</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;
@@ -217,7 +226,7 @@ function renderGameDetail(detail) {
     ["Owners", formatOwners(pick(detail, ["owners", "owner_count"]))],
     ["Positive reviews", formatNumber(pick(detail, ["positive_reviews", "positive", "positive_count"]))],
     ["Negative reviews", formatNumber(pick(detail, ["negative_reviews", "negative", "negative_count"]))],
-    ["Average playtime", `${formatNumber(pick(detail, ["average_playtime", "playtime_average"]))} min`],
+    ["Average playtime", formatPlaytime(pick(detail, ["average_playtime", "playtime_average"]))],
     ["Developer", pick(detail, ["developer", "developers"])],
   ];
 

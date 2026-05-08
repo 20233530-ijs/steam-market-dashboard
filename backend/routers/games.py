@@ -22,6 +22,14 @@ def get_games(db: connection = Depends(get_db)) -> list[dict]:
                 collected_at
             FROM game_stats
             ORDER BY app_id, collected_at DESC, stat_id DESC
+        ),
+        review_playtime AS (
+            SELECT
+                app_id,
+                ROUND(AVG(playtime_hours) * 60)::int AS average_playtime
+            FROM reviews
+            WHERE playtime_hours IS NOT NULL AND playtime_hours > 0
+            GROUP BY app_id
         )
         SELECT
             g.app_id AS game_id,
@@ -30,9 +38,11 @@ def get_games(db: connection = Depends(get_db)) -> list[dict]:
             g.price,
             ls.owners,
             COALESCE(ls.positive_reviews, 0) AS positive_reviews,
-            COALESCE(ls.negative_reviews, 0) AS negative_reviews
+            COALESCE(ls.negative_reviews, 0) AS negative_reviews,
+            COALESCE(NULLIF(ls.average_playtime, 0), rp.average_playtime) AS average_playtime
         FROM games g
         LEFT JOIN latest_stats ls ON g.app_id = ls.app_id
+        LEFT JOIN review_playtime rp ON g.app_id = rp.app_id
         ORDER BY
             (ls.app_id IS NOT NULL) DESC,
             COALESCE(ls.positive_reviews, 0) + COALESCE(ls.negative_reviews, 0) DESC,
@@ -58,6 +68,16 @@ def get_game_detail(game_id: int, db: connection = Depends(get_db)) -> dict:
             FROM game_stats
             WHERE app_id = %s
             ORDER BY app_id, collected_at DESC, stat_id DESC
+        ),
+        review_playtime AS (
+            SELECT
+                app_id,
+                ROUND(AVG(playtime_hours) * 60)::int AS average_playtime
+            FROM reviews
+            WHERE app_id = %s
+                AND playtime_hours IS NOT NULL
+                AND playtime_hours > 0
+            GROUP BY app_id
         )
         SELECT
             g.app_id AS game_id,
@@ -72,15 +92,16 @@ def get_game_detail(game_id: int, db: connection = Depends(get_db)) -> dict:
             ls.owners,
             COALESCE(ls.positive_reviews, 0) AS positive_reviews,
             COALESCE(ls.negative_reviews, 0) AS negative_reviews,
-            ls.average_playtime,
+            COALESCE(NULLIF(ls.average_playtime, 0), rp.average_playtime) AS average_playtime,
             ls.peak_players,
             ls.collected_at
         FROM games g
         LEFT JOIN latest_stats ls ON g.app_id = ls.app_id
+        LEFT JOIN review_playtime rp ON g.app_id = rp.app_id
         WHERE g.app_id = %s
     """
     with db.cursor() as cursor:
-        cursor.execute(query, (game_id, game_id))
+        cursor.execute(query, (game_id, game_id, game_id))
         game = cursor.fetchone()
 
     if game is None:

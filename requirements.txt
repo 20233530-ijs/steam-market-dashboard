@@ -3,6 +3,7 @@ psycopg2-binary
 python-dotenv
 SQLAlchemy
 fastapi
+pydantic
 uvicorn
 apscheduler
 pandas

@@ -11,6 +11,7 @@ class GameListItem(BaseModel):
     owners: str | None = None
     positive_reviews: int
     negative_reviews: int
+    average_playtime: int | None = None
 
 
 class GameDetail(GameListItem):
@@ -19,7 +20,6 @@ class GameDetail(GameListItem):
     publisher: str | None = None
     languages: str | None = None
     tags: str | None = None
-    average_playtime: int | None = None
     peak_players: int | None = None
     collected_at: datetime | None = None
 
@@ -29,4 +29,3 @@ class DashboardSummary(BaseModel):
     total_reviews: int
     average_positive_ratio: float
     top_genre: str
-
