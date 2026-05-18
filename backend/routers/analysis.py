@@ -1,8 +1,21 @@
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, Query
 from psycopg2.extensions import connection
 
 from backend.database import get_db
-from backend.schemas.analysis_schema import CorrelationResult, SentimentOverview, TopicOverview
+from backend.schemas.analysis_schema import (
+    AnalysisTrendsResponse,
+    CorrelationResult,
+    GenreStatsResponse,
+    PriceReviewPoint,
+    PriceBandStatsResponse,
+    PlatformStatsResponse,
+    ReviewInsightsResponse,
+    SentimentOverview,
+    TopicClusterResponse,
+    TopicOverview,
+)
 from backend.schemas.game_schema import DashboardSummary
 
 
@@ -119,30 +132,412 @@ def get_correlation_results(db: connection = Depends(get_db)) -> list[dict]:
     ]
 
 
-@router.get("/dashboard/summary", response_model=DashboardSummary)
-def get_dashboard_summary(db: connection = Depends(get_db)) -> dict:
+def get_summary_metrics(db: connection, start_date: date | None, end_date: date | None) -> dict:
+    review_filters = []
+    params = []
+    if start_date:
+        review_filters.append("r.collected_at::date >= %s")
+        params.append(start_date)
+    if end_date:
+        review_filters.append("r.collected_at::date <= %s")
+        params.append(end_date)
+    review_where = "WHERE " + " AND ".join(review_filters) if review_filters else ""
+
     query = """
-        WITH sentiment_by_game AS (
+        WITH filtered_reviews AS (
+            SELECT r.review_id, r.app_id
+            FROM reviews r
+            {review_where}
+        ),
+        sentiment_by_game AS (
             SELECT
-                app_id,
+                fr.app_id,
                 AVG((sentiment_label = 'positive')::int)::float AS positive_ratio
-            FROM review_sentiments
-            GROUP BY app_id
+            FROM filtered_reviews fr
+            JOIN review_sentiments rs ON fr.review_id = rs.review_id
+            GROUP BY fr.app_id
         ),
         top_genre AS (
-            SELECT genre
-            FROM games
-            WHERE genre IS NOT NULL AND genre <> ''
-            GROUP BY genre
-            ORDER BY COUNT(*) DESC, genre ASC
+            SELECT g.genre
+            FROM filtered_reviews fr
+            JOIN games g ON g.app_id = fr.app_id
+            WHERE g.genre IS NOT NULL AND g.genre <> ''
+            GROUP BY g.genre
+            ORDER BY COUNT(*) DESC, g.genre ASC
             LIMIT 1
         )
         SELECT
             (SELECT COUNT(*)::int FROM games) AS total_games,
-            (SELECT COUNT(*)::int FROM reviews) AS total_reviews,
+            (SELECT COUNT(*)::int FROM filtered_reviews) AS total_reviews,
             COALESCE((SELECT AVG(positive_ratio)::float FROM sentiment_by_game), 0) AS average_positive_ratio,
             COALESCE((SELECT genre FROM top_genre), '') AS top_genre
+    """.format(review_where=review_where)
+    with db.cursor() as cursor:
+        cursor.execute(query, params)
+        return cursor.fetchone()
+
+
+def percent_change(current: float, previous: float) -> float | None:
+    if previous == 0:
+        return None
+    return ((current - previous) / previous) * 100
+
+
+@router.get("/dashboard/summary", response_model=DashboardSummary)
+def get_dashboard_summary(
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: connection = Depends(get_db),
+) -> dict:
+    current = get_summary_metrics(db, start_date, end_date)
+    if not start_date or not end_date:
+        return {
+            **current,
+            "average_positive_ratio": current["average_positive_ratio"] * 100,
+            "period": None,
+            "previous_period": None,
+            "changes": None,
+        }
+
+    period_days = (end_date - start_date).days + 1
+    previous_end = start_date - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=period_days - 1)
+    previous = get_summary_metrics(db, previous_start, previous_end)
+
+    current_ratio = current["average_positive_ratio"] * 100
+    previous_ratio = previous["average_positive_ratio"] * 100
+
+    return {
+        **current,
+        "average_positive_ratio": current_ratio,
+        "period": {"start_date": start_date, "end_date": end_date},
+        "previous_period": {"start_date": previous_start, "end_date": previous_end},
+        "changes": {
+            "total_reviews_percent": percent_change(current["total_reviews"], previous["total_reviews"]),
+            "average_positive_ratio_points": current_ratio - previous_ratio,
+            "total_games_percent": percent_change(current["total_games"], previous["total_games"]),
+        },
+    }
+
+
+@router.get("/analysis/trends", response_model=AnalysisTrendsResponse)
+def get_analysis_trends(
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    top_genres_limit: int = Query(default=5, ge=1, le=10),
+    db: connection = Depends(get_db),
+) -> dict:
+    filters = []
+    params: list = []
+    if start_date:
+        filters.append("r.collected_at::date >= %s")
+        params.append(start_date)
+    if end_date:
+        filters.append("r.collected_at::date <= %s")
+        params.append(end_date)
+    where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+
+    if not filters:
+        market_query = """
+            SELECT period, review_count, positive_reviews, negative_reviews, positive_ratio
+            FROM mv_monthly_market_trends
+            ORDER BY period
+        """
+    else:
+        market_query = f"""
+        SELECT
+            to_char(date_trunc('month', r.collected_at), 'YYYY-MM') AS period,
+            COUNT(*)::int AS review_count,
+            COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::int AS positive_reviews,
+            COUNT(*) FILTER (WHERE rs.sentiment_label = 'negative')::int AS negative_reviews,
+            CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE (COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::float / COUNT(*)) * 100
+            END AS positive_ratio
+        FROM reviews r
+        LEFT JOIN review_sentiments rs ON r.review_id = rs.review_id
+        {where_clause}
+        GROUP BY date_trunc('month', r.collected_at)
+        ORDER BY date_trunc('month', r.collected_at)
+        """
+    top_genres_query = f"""
+        SELECT COALESCE(NULLIF(g.genre, ''), 'Unknown') AS genre
+        FROM reviews r
+        JOIN games g ON g.app_id = r.app_id
+        {where_clause}
+        GROUP BY genre
+        ORDER BY COUNT(*) DESC, genre ASC
+        LIMIT %s
+    """
+    genre_series_query = f"""
+        SELECT
+            COALESCE(NULLIF(g.genre, ''), 'Unknown') AS genre,
+            to_char(date_trunc('month', r.collected_at), 'YYYY-MM') AS period,
+            COUNT(*)::int AS review_count,
+            COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::int AS positive_reviews,
+            COUNT(*) FILTER (WHERE rs.sentiment_label = 'negative')::int AS negative_reviews,
+            CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE (COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::float / COUNT(*)) * 100
+            END AS positive_ratio
+        FROM reviews r
+        JOIN games g ON g.app_id = r.app_id
+        LEFT JOIN review_sentiments rs ON r.review_id = rs.review_id
+        {where_clause}
+            AND COALESCE(NULLIF(g.genre, ''), 'Unknown') = ANY(%s)
+        GROUP BY genre, date_trunc('month', r.collected_at)
+        ORDER BY genre, date_trunc('month', r.collected_at)
+    """
+    if not where_clause:
+        genre_series_query = genre_series_query.replace("WHERE", "WHERE", 1).replace(
+            "\n            AND COALESCE", "\n        WHERE COALESCE"
+        )
+
+    with db.cursor() as cursor:
+        cursor.execute(market_query, params)
+        market = cursor.fetchall()
+        cursor.execute(top_genres_query, (*params, top_genres_limit))
+        top_genres = [row["genre"] for row in cursor.fetchall()]
+        cursor.execute(genre_series_query, (*params, top_genres))
+        series_rows = cursor.fetchall()
+
+    grouped = {genre: [] for genre in top_genres}
+    for row in series_rows:
+        genre = row.pop("genre")
+        grouped.setdefault(genre, []).append(row)
+
+    return {
+        "market": market,
+        "top_genres": [{"genre": genre, "data": data} for genre, data in grouped.items()],
+    }
+
+
+@router.get("/analysis/price-review", response_model=list[PriceReviewPoint])
+def get_price_review_points(
+    limit: int = Query(default=1000, ge=1, le=5000),
+    db: connection = Depends(get_db),
+) -> list[dict]:
+    query = """
+        SELECT
+            game_id,
+            name,
+            genre,
+            price,
+            total_reviews,
+            positive_ratio
+        FROM mv_price_review_points
+        ORDER BY total_reviews DESC, name ASC
+        LIMIT %s
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, (limit,))
+        return cursor.fetchall()
+
+
+@router.get("/analysis/genre-stats", response_model=GenreStatsResponse)
+def get_genre_stats(
+    limit: int = Query(default=30, ge=1, le=100),
+    db: connection = Depends(get_db),
+) -> dict:
+    query = """
+        WITH genre_values AS (
+            SELECT
+                trim(genre_value) AS genre,
+                g.price,
+                COALESCE(gaf.review_count, 0) AS review_count,
+                COALESCE(gaf.sentiment_positive_ratio, 0) * 100 AS positive_ratio
+            FROM games g
+            LEFT JOIN game_analysis_features gaf ON g.app_id = gaf.app_id
+            CROSS JOIN LATERAL regexp_split_to_table(COALESCE(g.genre, ''), ',') AS genre_value
+        )
+        SELECT
+            genre,
+            COUNT(*)::int AS game_count,
+            COALESCE(AVG(price), 0)::float AS avg_price,
+            COALESCE(AVG(review_count), 0)::float AS avg_review_count,
+            COALESCE(AVG(positive_ratio), 0)::float AS avg_positive_ratio
+        FROM genre_values
+        WHERE genre <> ''
+        GROUP BY genre
+        ORDER BY game_count DESC, genre ASC
+        LIMIT %s
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, (limit,))
+        return {"items": cursor.fetchall()}
+
+
+@router.get("/analysis/price-band-stats", response_model=PriceBandStatsResponse)
+def get_price_band_stats(db: connection = Depends(get_db)) -> dict:
+    query = """
+        WITH banded AS (
+            SELECT
+                CASE
+                    WHEN COALESCE(g.price, 0) = 0 THEN 'Free'
+                    WHEN g.price < 5000 THEN '0-5000'
+                    WHEN g.price < 15000 THEN '5000-15000'
+                    WHEN g.price < 30000 THEN '15000-30000'
+                    ELSE '30000+'
+                END AS price_band,
+                CASE
+                    WHEN COALESCE(g.price, 0) = 0 THEN 0
+                    WHEN g.price < 5000 THEN 1
+                    WHEN g.price < 15000 THEN 2
+                    WHEN g.price < 30000 THEN 3
+                    ELSE 4
+                END AS sort_order,
+                COALESCE(gaf.review_count, 0) AS review_count,
+                COALESCE(gaf.sentiment_positive_ratio, 0) * 100 AS positive_ratio
+            FROM games g
+            LEFT JOIN game_analysis_features gaf ON g.app_id = gaf.app_id
+        )
+        SELECT
+            price_band,
+            COUNT(*)::int AS game_count,
+            COALESCE(AVG(review_count), 0)::float AS avg_review_count,
+            COALESCE(AVG(positive_ratio), 0)::float AS avg_positive_ratio
+        FROM banded
+        GROUP BY price_band, sort_order
+        ORDER BY sort_order ASC
     """
     with db.cursor() as cursor:
         cursor.execute(query)
-        return cursor.fetchone()
+        return {"items": cursor.fetchall()}
+
+
+@router.get("/analysis/platform-stats", response_model=PlatformStatsResponse)
+def get_platform_stats(db: connection = Depends(get_db)) -> dict:
+    query = """
+        WITH platform_games AS (
+            SELECT 'Windows' AS platform, g.app_id, COALESCE(gaf.sentiment_positive_ratio, 0) * 100 AS positive_ratio
+            FROM games g
+            LEFT JOIN game_analysis_features gaf ON g.app_id = gaf.app_id
+            WHERE g.is_windows IS TRUE
+            UNION ALL
+            SELECT 'Mac' AS platform, g.app_id, COALESCE(gaf.sentiment_positive_ratio, 0) * 100 AS positive_ratio
+            FROM games g
+            LEFT JOIN game_analysis_features gaf ON g.app_id = gaf.app_id
+            WHERE g.is_mac IS TRUE
+            UNION ALL
+            SELECT 'Linux' AS platform, g.app_id, COALESCE(gaf.sentiment_positive_ratio, 0) * 100 AS positive_ratio
+            FROM games g
+            LEFT JOIN game_analysis_features gaf ON g.app_id = gaf.app_id
+            WHERE g.is_linux IS TRUE
+        )
+        SELECT
+            platform,
+            COUNT(DISTINCT app_id)::int AS game_count,
+            COALESCE(AVG(positive_ratio), 0)::float AS avg_positive_ratio
+        FROM platform_games
+        GROUP BY platform
+        ORDER BY
+            CASE platform
+                WHEN 'Windows' THEN 1
+                WHEN 'Mac' THEN 2
+                WHEN 'Linux' THEN 3
+                ELSE 4
+            END
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query)
+        return {"items": cursor.fetchall()}
+
+
+@router.get("/games/{game_id}/reviews/insights", response_model=ReviewInsightsResponse)
+def get_review_insights(game_id: int, db: connection = Depends(get_db)) -> dict:
+    query = """
+        WITH category_reviews AS (
+            SELECT
+                category_map.category,
+                category_map.keywords,
+                rs.sentiment_label
+            FROM cleaned_reviews cr
+            JOIN review_sentiments rs ON cr.review_id = rs.review_id
+            CROSS JOIN (
+                VALUES
+                    ('gameplay', ARRAY['gameplay', 'combat', 'mechanic', 'controls', 'fun']),
+                    ('bugs', ARRAY['bug', 'crash', 'glitch', 'broken', 'error']),
+                    ('graphics', ARRAY['graphics', 'visual', 'art', 'animation', 'beautiful']),
+                    ('performance', ARRAY['performance', 'fps', 'lag', 'optimization', 'stutter']),
+                    ('story', ARRAY['story', 'character', 'narrative', 'dialogue', 'ending']),
+                    ('price', ARRAY['price', 'value', 'worth', 'expensive', 'cheap']),
+                    ('multiplayer', ARRAY['multiplayer', 'coop', 'online', 'server', 'matchmaking'])
+            ) AS category_map(category, keywords)
+            WHERE cr.app_id = %s
+                AND EXISTS (
+                    SELECT 1
+                    FROM unnest(category_map.keywords) keyword
+                    WHERE lower(cr.clean_text) LIKE '%%' || keyword || '%%'
+                )
+        )
+        SELECT
+            category,
+            keywords,
+            COUNT(*) FILTER (WHERE sentiment_label = 'positive')::int AS positive_count,
+            COUNT(*) FILTER (WHERE sentiment_label = 'negative')::int AS negative_count,
+            COUNT(*) FILTER (WHERE sentiment_label = 'neutral')::int AS neutral_count,
+            CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE COUNT(*) FILTER (WHERE sentiment_label = 'positive')::float / COUNT(*)
+            END AS positive_ratio,
+            CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE COUNT(*) FILTER (WHERE sentiment_label = 'negative')::float / COUNT(*)
+            END AS negative_ratio
+        FROM category_reviews
+        GROUP BY category, keywords
+        ORDER BY COUNT(*) DESC, category ASC
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, (game_id,))
+        rows = cursor.fetchall()
+
+    return {
+        "game_id": game_id,
+        "topic_sentiment_available": False,
+        "message": "Review-level topic mapping is not available yet.",
+        "satisfaction_factors": sorted(rows, key=lambda row: row["positive_ratio"], reverse=True)[:5],
+        "dissatisfaction_factors": sorted(rows, key=lambda row: row["negative_ratio"], reverse=True)[:5],
+        "topics": rows,
+    }
+
+
+@router.get("/analysis/topics/clusters", response_model=TopicClusterResponse)
+def get_topic_clusters(
+    limit: int = Query(default=10, ge=1, le=30),
+    db: connection = Depends(get_db),
+) -> dict:
+    query = """
+        SELECT topic_id, topic_keywords, topic_weight
+        FROM global_topics
+        ORDER BY topic_weight DESC, topic_id ASC
+        LIMIT %s
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, (limit,))
+        rows = cursor.fetchall()
+
+    nodes = []
+    links = []
+    seen_keywords = set()
+    for row in rows:
+        topic_id = row["topic_id"]
+        topic_node_id = f"topic-{topic_id}"
+        weight = float(row["topic_weight"] or 0)
+        nodes.append(
+            {
+                "id": topic_node_id,
+                "label": f"Topic {topic_id}",
+                "weight": weight,
+                "topic_id": topic_id,
+            }
+        )
+        keywords = [keyword.strip() for keyword in row["topic_keywords"].split(",") if keyword.strip()]
+        for keyword in keywords[:8]:
+            keyword_id = f"keyword-{keyword.lower().replace(' ', '-')}"
+            if keyword_id not in seen_keywords:
+                seen_keywords.add(keyword_id)
+                nodes.append({"id": keyword_id, "label": keyword, "weight": weight, "topic_id": topic_id})
+            links.append({"source": topic_node_id, "target": keyword_id, "value": weight})
+
+    return {"nodes": nodes, "links": links}

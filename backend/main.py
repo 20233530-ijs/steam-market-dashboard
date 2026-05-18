@@ -38,7 +38,9 @@ DEFAULT_CORS_ORIGINS = [
 def get_allowed_origins() -> list[str]:
     env_origins = os.getenv("BACKEND_CORS_ORIGINS", "")
     configured_origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
-    return sorted(set(DEFAULT_CORS_ORIGINS + configured_origins))
+    if configured_origins:
+        return sorted(set(configured_origins))
+    return DEFAULT_CORS_ORIGINS
 
 
 app.add_middleware(
@@ -61,6 +63,8 @@ def health() -> dict:
 
 
 app.include_router(games.router)
+app.include_router(games.catalog_router)
+app.include_router(games.users_router)
 app.include_router(sentiment.router)
 app.include_router(topics.router)
 app.include_router(analysis.router)

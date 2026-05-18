@@ -111,6 +111,29 @@ Key endpoints:
 - `GET /games/{game_id}/topics`
 - `GET /analysis/correlation`
 - `GET /dashboard/summary`
+- `GET /analysis/genre-stats`
+- `GET /analysis/price-band-stats`
+- `GET /analysis/platform-stats`
+
+Frontend-facing API details, cursor pagination examples, and real-DB verification commands are documented in
+[`docs/API.md`](docs/API.md).
+
+Authentication is intentionally not implemented in this project. Wishlist and notification APIs use the demo-friendly
+`X-Client-Id` header; the frontend can persist a generated client id in localStorage and send it with those requests.
+
+After collection or analysis updates, refresh materialized views used by trend and price-review endpoints:
+
+```powershell
+python database\refresh_materialized_views.py
+```
+
+To verify the running API against a real PostgreSQL database:
+
+```powershell
+python scripts\verify_api_real_db.py --base-url <provided-api-origin>
+```
+
+You can also set `API_BASE_URL` instead of passing `--base-url`.
 
 ## Frontend
 
@@ -120,7 +143,8 @@ Serve the static dashboard from the project root:
 python -m http.server 5500 -d frontend
 ```
 
-Open `http://localhost:5500` and keep the API URL set to `http://localhost:8000`.
+Open `http://localhost:5500` for local static development. Set the API URL in the frontend UI or environment configuration
+to the backend origin provided for your environment.
 
 ## Tests
 

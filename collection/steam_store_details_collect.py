@@ -55,18 +55,37 @@ def normalize_appdetails(data):
     release_date = (data.get("release_date") or {}).get("date", "")
     languages = data.get("supported_languages", "")
     price_overview = data.get("price_overview") or {}
-    price = price_overview.get("final")
+    platforms = data.get("platforms") or {}
+    metacritic = data.get("metacritic") or {}
+    original_price = price_overview.get("initial")
+    final_price = price_overview.get("final")
+    discount_percent = price_overview.get("discount_percent")
+    price = final_price
     if data.get("is_free"):
+        original_price = 0
+        final_price = 0
+        discount_percent = 0
         price = 0
 
     return {
         "name": data.get("name", ""),
         "genre": genres,
         "price": price,
+        "is_free": bool(data.get("is_free")),
+        "discount_percent": discount_percent,
+        "final_price": final_price,
+        "original_price": original_price,
         "release_date": release_date,
         "developer": developers,
         "publisher": publishers,
         "languages": languages,
+        "header_image": data.get("header_image"),
+        "capsule_image": data.get("capsule_image"),
+        "website": data.get("website"),
+        "is_windows": platforms.get("windows"),
+        "is_mac": platforms.get("mac"),
+        "is_linux": platforms.get("linux"),
+        "metacritic_score": metacritic.get("score"),
     }
 
 
@@ -124,21 +143,54 @@ def collect_steam_store_details(app_ids=None, limit=DEFAULT_DETAILS_LIMIT, cc="u
                             name = COALESCE(NULLIF(%s, ''), name),
                             genre = COALESCE(NULLIF(%s, ''), genre),
                             price = COALESCE(%s, price),
+                            is_free = COALESCE(%s, is_free),
                             release_date = COALESCE(NULLIF(%s, ''), release_date),
                             developer = COALESCE(NULLIF(%s, ''), developer),
                             publisher = COALESCE(NULLIF(%s, ''), publisher),
-                            languages = COALESCE(NULLIF(%s, ''), languages)
+                            languages = COALESCE(NULLIF(%s, ''), languages),
+                            header_image = COALESCE(NULLIF(%s, ''), header_image),
+                            capsule_image = COALESCE(NULLIF(%s, ''), capsule_image),
+                            website = COALESCE(NULLIF(%s, ''), website),
+                            is_windows = COALESCE(%s, is_windows),
+                            is_mac = COALESCE(%s, is_mac),
+                            is_linux = COALESCE(%s, is_linux),
+                            metacritic_score = COALESCE(%s, metacritic_score)
                         WHERE app_id = %s
                         """,
                         (
                             normalized["name"],
                             normalized["genre"],
                             normalized["price"],
+                            normalized["is_free"],
                             normalized["release_date"],
                             normalized["developer"],
                             normalized["publisher"],
                             normalized["languages"],
+                            normalized["header_image"],
+                            normalized["capsule_image"],
+                            normalized["website"],
+                            normalized["is_windows"],
+                            normalized["is_mac"],
+                            normalized["is_linux"],
+                            normalized["metacritic_score"],
                             int(app_id),
+                        ),
+                    )
+                    cursor.execute(
+                        """
+                        INSERT INTO game_price_history (
+                            app_id,
+                            price,
+                            discount_percent,
+                            final_price
+                        )
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (
+                            int(app_id),
+                            normalized["original_price"],
+                            normalized["discount_percent"],
+                            normalized["final_price"],
                         ),
                     )
                     cursor.execute("RELEASE SAVEPOINT appdetails_update")

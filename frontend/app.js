@@ -26,6 +26,14 @@ function getApiBase() {
   return elements.apiBaseInput.value.trim().replace(/\/+$/, "");
 }
 
+function requireApiBase() {
+  const apiBase = getApiBase();
+  if (!apiBase) {
+    throw new Error("API base URL is required for this environment.");
+  }
+  return apiBase;
+}
+
 function setStatus(message, isError = false) {
   elements.statusMessage.textContent = message;
   elements.statusMessage.classList.toggle("error", isError);
@@ -44,7 +52,7 @@ function logResult(label, payload, status = "success") {
 }
 
 async function requestJson(path, label) {
-  const response = await fetch(`${getApiBase()}${path}`);
+  const response = await fetch(`${requireApiBase()}${path}`);
   if (!response.ok) {
     const error = new Error(`${label} request failed (${response.status})`);
     error.status = response.status;
@@ -363,9 +371,9 @@ async function loadDashboard() {
   resetLog();
   setStatus("Loading data...");
   elements.loadButton.disabled = true;
-  localStorage.setItem("steamTrendApiBase", getApiBase());
 
   try {
+    localStorage.setItem("steamTrendApiBase", requireApiBase());
     await requestJson("/health", "health");
     const games = await loadGames();
     const sentiment = await requestOptional("/analysis/sentiment", "overall sentiment");
