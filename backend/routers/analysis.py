@@ -10,9 +10,14 @@ from backend.schemas.analysis_schema import (
     GenreStatsResponse,
     PriceReviewPoint,
     PriceBandStatsResponse,
+    PriceTrendsResponse,
     PlatformStatsResponse,
+    GenreTopicsResponse,
+    GenreTrendsResponse,
+    ReleaseYearStatsResponse,
     ReviewInsightsResponse,
     SentimentOverview,
+    TopicSentimentResponse,
     TopicClusterResponse,
     TopicOverview,
 )
@@ -21,6 +26,16 @@ from backend.schemas.game_schema import DashboardSummary
 
 router = APIRouter(tags=["analysis"])
 MIN_SAMPLE_SIZE = 1000
+TOPIC_CATEGORY_VALUES = """
+    VALUES
+        ('gameplay', ARRAY['gameplay', 'combat', 'mechanic', 'controls', 'fun']),
+        ('bugs', ARRAY['bug', 'crash', 'glitch', 'broken', 'error']),
+        ('graphics', ARRAY['graphics', 'visual', 'art', 'animation', 'beautiful']),
+        ('performance', ARRAY['performance', 'fps', 'lag', 'optimization', 'stutter']),
+        ('story', ARRAY['story', 'character', 'narrative', 'dialogue', 'ending']),
+        ('price', ARRAY['price', 'value', 'worth', 'expensive', 'cheap']),
+        ('multiplayer', ARRAY['multiplayer', 'coop', 'online', 'server', 'matchmaking'])
+"""
 
 
 def get_reliability(sample_size: int) -> str:
@@ -181,6 +196,22 @@ def percent_change(current: float, previous: float) -> float | None:
     if previous == 0:
         return None
     return ((current - previous) / previous) * 100
+
+
+def date_filters(alias: str, start_date: date | None, end_date: date | None) -> tuple[list[str], list]:
+    filters = []
+    params: list = []
+    if start_date:
+        filters.append(f"{alias}.collected_at::date >= %s")
+        params.append(start_date)
+    if end_date:
+        filters.append(f"{alias}.collected_at::date <= %s")
+        params.append(end_date)
+    return filters, params
+
+
+def where_clause(filters: list[str]) -> str:
+    return "WHERE " + " AND ".join(filters) if filters else ""
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)
@@ -440,6 +471,280 @@ def get_platform_stats(db: connection = Depends(get_db)) -> dict:
     """
     with db.cursor() as cursor:
         cursor.execute(query)
+        return {"items": cursor.fetchall()}
+
+
+@router.get("/analysis/genre-trends", response_model=GenreTrendsResponse)
+def get_genre_trends(
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    limit: int = Query(default=8, ge=1, le=20),
+    db: connection = Depends(get_db),
+) -> dict:
+    filters, params = date_filters("r", start_date, end_date)
+    date_where = where_clause(filters)
+    query = f"""
+        WITH top_genres AS (
+            SELECT COALESCE(NULLIF(g.genre, ''), 'Unknown') AS genre
+            FROM reviews r
+            JOIN games g ON g.app_id = r.app_id
+            {date_where}
+            GROUP BY genre
+            ORDER BY COUNT(*) DESC, genre ASC
+            LIMIT %s
+        ),
+        monthly AS (
+            SELECT
+                COALESCE(NULLIF(g.genre, ''), 'Unknown') AS genre,
+                to_char(date_trunc('month', r.collected_at), 'YYYY-MM') AS period,
+                COUNT(*)::int AS review_count,
+                COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::int AS positive_reviews,
+                COUNT(*) FILTER (WHERE rs.sentiment_label = 'negative')::int AS negative_reviews,
+                CASE
+                    WHEN COUNT(*) = 0 THEN 0
+                    ELSE (COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::float / COUNT(*)) * 100
+                END AS positive_ratio
+            FROM reviews r
+            JOIN games g ON g.app_id = r.app_id
+            LEFT JOIN review_sentiments rs ON r.review_id = rs.review_id
+            {date_where}
+            GROUP BY genre, date_trunc('month', r.collected_at)
+        ),
+        ranked AS (
+            SELECT monthly.*
+            FROM monthly
+            JOIN top_genres tg ON tg.genre = monthly.genre
+        ),
+        with_previous AS (
+            SELECT
+                *,
+                LAG(review_count) OVER (PARTITION BY genre ORDER BY period) AS previous_review_count,
+                LAG(positive_ratio) OVER (PARTITION BY genre ORDER BY period) AS previous_positive_ratio
+            FROM ranked
+        )
+        SELECT
+            genre,
+            period,
+            review_count,
+            positive_reviews,
+            negative_reviews,
+            positive_ratio,
+            CASE
+                WHEN previous_review_count IS NULL OR previous_review_count = 0 THEN NULL
+                ELSE ((review_count - previous_review_count)::float / previous_review_count) * 100
+            END AS review_count_change_percent,
+            CASE
+                WHEN previous_positive_ratio IS NULL THEN NULL
+                ELSE positive_ratio - previous_positive_ratio
+            END AS positive_ratio_change_points
+        FROM with_previous
+        ORDER BY genre ASC, period ASC
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, (*params, limit, *params))
+        return {"items": cursor.fetchall()}
+
+
+@router.get("/analysis/price-trends", response_model=PriceTrendsResponse)
+def get_price_trends(
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: connection = Depends(get_db),
+) -> dict:
+    filters, params = date_filters("r", start_date, end_date)
+    date_where = where_clause(filters)
+    query = f"""
+        WITH monthly AS (
+            SELECT
+                CASE
+                    WHEN COALESCE(g.price, 0) = 0 THEN 'Free'
+                    WHEN g.price < 5000 THEN '0-5000'
+                    WHEN g.price < 15000 THEN '5000-15000'
+                    WHEN g.price < 30000 THEN '15000-30000'
+                    ELSE '30000+'
+                END AS price_band,
+                CASE
+                    WHEN COALESCE(g.price, 0) = 0 THEN 0
+                    WHEN g.price < 5000 THEN 1
+                    WHEN g.price < 15000 THEN 2
+                    WHEN g.price < 30000 THEN 3
+                    ELSE 4
+                END AS sort_order,
+                to_char(date_trunc('month', r.collected_at), 'YYYY-MM') AS period,
+                COUNT(*)::int AS review_count,
+                COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::int AS positive_reviews,
+                COUNT(*) FILTER (WHERE rs.sentiment_label = 'negative')::int AS negative_reviews,
+                CASE
+                    WHEN COUNT(*) = 0 THEN 0
+                    ELSE (COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::float / COUNT(*)) * 100
+                END AS positive_ratio
+            FROM reviews r
+            JOIN games g ON g.app_id = r.app_id
+            LEFT JOIN review_sentiments rs ON r.review_id = rs.review_id
+            {date_where}
+            GROUP BY price_band, sort_order, date_trunc('month', r.collected_at)
+        ),
+        with_previous AS (
+            SELECT
+                *,
+                LAG(review_count) OVER (PARTITION BY price_band ORDER BY period) AS previous_review_count,
+                LAG(positive_ratio) OVER (PARTITION BY price_band ORDER BY period) AS previous_positive_ratio
+            FROM monthly
+        )
+        SELECT
+            price_band,
+            period,
+            review_count,
+            positive_reviews,
+            negative_reviews,
+            positive_ratio,
+            CASE
+                WHEN previous_review_count IS NULL OR previous_review_count = 0 THEN NULL
+                ELSE ((review_count - previous_review_count)::float / previous_review_count) * 100
+            END AS review_count_change_percent,
+            CASE
+                WHEN previous_positive_ratio IS NULL THEN NULL
+                ELSE positive_ratio - previous_positive_ratio
+            END AS positive_ratio_change_points
+        FROM with_previous
+        ORDER BY sort_order ASC, period ASC
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, params)
+        return {"items": cursor.fetchall()}
+
+
+@router.get("/analysis/topics/sentiment", response_model=TopicSentimentResponse)
+def get_topic_sentiment(
+    genre: str | None = Query(default=None),
+    db: connection = Depends(get_db),
+) -> dict:
+    filters = []
+    params = []
+    if genre:
+        filters.append("g.genre ILIKE %s")
+        params.append(f"%{genre}%")
+    filter_clause = "AND " + " AND ".join(filters) if filters else ""
+    query = f"""
+        WITH category_reviews AS (
+            SELECT
+                category_map.category,
+                category_map.keywords,
+                rs.sentiment_label
+            FROM cleaned_reviews cr
+            JOIN games g ON g.app_id = cr.app_id
+            JOIN review_sentiments rs ON cr.review_id = rs.review_id
+            CROSS JOIN ({TOPIC_CATEGORY_VALUES}) AS category_map(category, keywords)
+            WHERE EXISTS (
+                    SELECT 1
+                    FROM unnest(category_map.keywords) keyword
+                    WHERE lower(cr.clean_text) LIKE '%%' || keyword || '%%'
+                )
+                {filter_clause}
+        )
+        SELECT
+            category,
+            keywords,
+            COUNT(*) FILTER (WHERE sentiment_label = 'positive')::int AS positive_count,
+            COUNT(*) FILTER (WHERE sentiment_label = 'neutral')::int AS neutral_count,
+            COUNT(*) FILTER (WHERE sentiment_label = 'negative')::int AS negative_count,
+            COUNT(*)::int AS total_count,
+            CASE WHEN COUNT(*) = 0 THEN 0 ELSE (COUNT(*) FILTER (WHERE sentiment_label = 'positive')::float / COUNT(*)) * 100 END AS positive_ratio,
+            CASE WHEN COUNT(*) = 0 THEN 0 ELSE (COUNT(*) FILTER (WHERE sentiment_label = 'neutral')::float / COUNT(*)) * 100 END AS neutral_ratio,
+            CASE WHEN COUNT(*) = 0 THEN 0 ELSE (COUNT(*) FILTER (WHERE sentiment_label = 'negative')::float / COUNT(*)) * 100 END AS negative_ratio
+        FROM category_reviews
+        GROUP BY category, keywords
+        ORDER BY total_count DESC, category ASC
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+    return {
+        "topic_sentiment_available": False,
+        "method": "keyword_category_fallback",
+        "message": "Review-level topic mapping is not available yet; this response uses keyword-category matching.",
+        "items": rows,
+    }
+
+
+@router.get("/analysis/topics/by-genre", response_model=GenreTopicsResponse)
+def get_topics_by_genre(
+    limit: int = Query(default=5, ge=1, le=20),
+    db: connection = Depends(get_db),
+) -> dict:
+    query = """
+        WITH genre_topics AS (
+            SELECT
+                trim(genre_value) AS genre,
+                gt.topic_id,
+                gt.topic_keywords,
+                SUM(gt.topic_weight)::float AS weight,
+                COUNT(DISTINCT gt.app_id)::int AS game_count,
+                ROW_NUMBER() OVER (
+                    PARTITION BY trim(genre_value)
+                    ORDER BY SUM(gt.topic_weight) DESC, gt.topic_id ASC
+                ) AS topic_rank
+            FROM game_topics gt
+            JOIN games g ON g.app_id = gt.app_id
+            CROSS JOIN LATERAL regexp_split_to_table(COALESCE(g.genre, ''), ',') AS genre_value
+            WHERE trim(genre_value) <> ''
+            GROUP BY trim(genre_value), gt.topic_id, gt.topic_keywords
+        )
+        SELECT
+            genre,
+            topic_id,
+            topic_keywords AS keywords,
+            weight,
+            game_count
+        FROM genre_topics
+        WHERE topic_rank <= %s
+        ORDER BY genre ASC, weight DESC, topic_id ASC
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, (limit,))
+        rows = cursor.fetchall()
+
+    return {
+        "topic_sentiment_available": False,
+        "message": "Genre topic weights are based on game-level topics; review-level topic sentiment is not available yet.",
+        "items": [
+            {
+                **row,
+                "keywords": [keyword.strip() for keyword in row["keywords"].split(",") if keyword.strip()],
+            }
+            for row in rows
+        ],
+    }
+
+
+@router.get("/analysis/release-year-stats", response_model=ReleaseYearStatsResponse)
+def get_release_year_stats(
+    start_year: int | None = Query(default=None, ge=1970, le=2100),
+    end_year: int | None = Query(default=None, ge=1970, le=2100),
+    db: connection = Depends(get_db),
+) -> dict:
+    filters = ["gaf.release_year IS NOT NULL"]
+    params = []
+    if start_year is not None:
+        filters.append("gaf.release_year >= %s")
+        params.append(start_year)
+    if end_year is not None:
+        filters.append("gaf.release_year <= %s")
+        params.append(end_year)
+    query = f"""
+        SELECT
+            gaf.release_year,
+            COUNT(*)::int AS game_count,
+            COALESCE(AVG(gaf.review_count), 0)::float AS avg_review_count,
+            (COALESCE(AVG(gaf.sentiment_positive_ratio), 0) * 100)::float AS avg_positive_ratio
+        FROM game_analysis_features gaf
+        WHERE {" AND ".join(filters)}
+        GROUP BY gaf.release_year
+        ORDER BY gaf.release_year ASC
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, params)
         return {"items": cursor.fetchall()}
 
 

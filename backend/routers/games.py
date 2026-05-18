@@ -703,6 +703,56 @@ def get_game_history(
     return rows
 
 
+@router.get("/{game_id}/review-trend", response_model=list[GameHistoryPoint])
+def get_game_review_trend(
+    game_id: int,
+    interval: str = Query(default="month", pattern="^(day|week|month)$"),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: connection = Depends(get_db),
+) -> list[dict]:
+    filters = ["r.app_id = %s"]
+    params: list = [game_id]
+    if start_date:
+        filters.append("r.collected_at::date >= %s")
+        params.append(start_date)
+    if end_date:
+        filters.append("r.collected_at::date <= %s")
+        params.append(end_date)
+
+    query = f"""
+        SELECT
+            date_trunc(%s, r.collected_at)::date AS period,
+            COUNT(*)::int AS review_count,
+            COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::int AS positive_reviews,
+            COUNT(*) FILTER (WHERE rs.sentiment_label = 'negative')::int AS negative_reviews,
+            CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE (COUNT(*) FILTER (WHERE rs.sentiment_label = 'positive')::float / COUNT(*)) * 100
+            END AS positive_ratio,
+            NULL::int AS price,
+            NULL::int AS discount_percent,
+            NULL::int AS final_price,
+            NULL::varchar AS owners,
+            NULL::int AS peak_players
+        FROM reviews r
+        LEFT JOIN review_sentiments rs ON r.review_id = rs.review_id
+        WHERE {" AND ".join(filters)}
+        GROUP BY period
+        ORDER BY period ASC
+    """
+    with db.cursor() as cursor:
+        cursor.execute(query, (interval, *params))
+        rows = cursor.fetchall()
+
+    if not rows:
+        with db.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM games WHERE app_id = %s", (game_id,))
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Game not found")
+    return rows
+
+
 @users_router.get("/wishlist", response_model=WishlistResponse)
 def get_wishlist(
     user_key: str = Depends(get_client_user_key),
@@ -716,6 +766,31 @@ def get_wishlist(
             FROM reviews
             WHERE collected_at >= NOW() - INTERVAL '30 days'
             GROUP BY app_id
+        ),
+        recent_prices AS (
+            SELECT
+                app_id,
+                MIN(COALESCE(final_price, price))::int AS lowest_price_30d,
+                MAX(COALESCE(final_price, price))::int AS highest_price_30d
+            FROM game_price_history
+            WHERE collected_at >= NOW() - INTERVAL '30 days'
+            GROUP BY app_id
+        ),
+        price_edges AS (
+            SELECT DISTINCT ON (app_id)
+                app_id,
+                FIRST_VALUE(COALESCE(final_price, price)) OVER (
+                    PARTITION BY app_id
+                    ORDER BY collected_at ASC, price_history_id ASC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                ) AS first_price_30d,
+                FIRST_VALUE(COALESCE(final_price, price)) OVER (
+                    PARTITION BY app_id
+                    ORDER BY collected_at DESC, price_history_id DESC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                ) AS latest_price_30d
+            FROM game_price_history
+            WHERE collected_at >= NOW() - INTERVAL '30 days'
         )
         SELECT
             b.game_id,
@@ -729,11 +804,18 @@ def get_wishlist(
             b.total_reviews,
             b.positive_ratio,
             b.average_playtime,
-            NULL::int AS price_change_30d,
+            CASE
+                WHEN pe.first_price_30d IS NULL OR pe.latest_price_30d IS NULL THEN NULL
+                ELSE (pe.latest_price_30d - pe.first_price_30d)::int
+            END AS price_change_30d,
+            rp.lowest_price_30d,
+            rp.highest_price_30d,
             COALESCE(rr.review_change_30d, 0) AS review_change_30d
         FROM user_wishlist uw
         JOIN base b ON b.game_id = uw.app_id
         LEFT JOIN recent_reviews rr ON rr.app_id = uw.app_id
+        LEFT JOIN recent_prices rp ON rp.app_id = uw.app_id
+        LEFT JOIN price_edges pe ON pe.app_id = uw.app_id
         WHERE uw.user_key = %s
         ORDER BY uw.created_at DESC, b.name ASC
     """

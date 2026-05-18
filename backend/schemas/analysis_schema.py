@@ -131,3 +131,73 @@ class PlatformStatsItem(BaseModel):
 
 class PlatformStatsResponse(BaseModel):
     items: list[PlatformStatsItem]
+
+
+class MonthlyTrendItem(BaseModel):
+    period: str
+    review_count: int
+    positive_reviews: int
+    negative_reviews: int
+    positive_ratio: float
+    review_count_change_percent: float | None = None
+    positive_ratio_change_points: float | None = None
+
+
+class GenreMonthlyTrendItem(MonthlyTrendItem):
+    genre: str
+
+
+class GenreTrendsResponse(BaseModel):
+    items: list[GenreMonthlyTrendItem]
+
+
+class PriceMonthlyTrendItem(MonthlyTrendItem):
+    price_band: str
+
+
+class PriceTrendsResponse(BaseModel):
+    items: list[PriceMonthlyTrendItem]
+
+
+class TopicSentimentItem(BaseModel):
+    category: str
+    positive_count: int
+    neutral_count: int
+    negative_count: int
+    total_count: int
+    positive_ratio: float
+    neutral_ratio: float
+    negative_ratio: float
+    keywords: list[str]
+
+
+class TopicSentimentResponse(BaseModel):
+    topic_sentiment_available: bool = False
+    method: str
+    message: str
+    items: list[TopicSentimentItem]
+
+
+class GenreTopicItem(BaseModel):
+    genre: str
+    topic_id: int
+    keywords: list[str]
+    weight: float
+    game_count: int
+
+
+class GenreTopicsResponse(BaseModel):
+    topic_sentiment_available: bool = False
+    message: str
+    items: list[GenreTopicItem]
+
+
+class ReleaseYearStatsItem(BaseModel):
+    release_year: int
+    game_count: int
+    avg_review_count: float
+    avg_positive_ratio: float
+
+
+class ReleaseYearStatsResponse(BaseModel):
+    items: list[ReleaseYearStatsItem]

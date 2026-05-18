@@ -114,9 +114,12 @@ Key endpoints:
 - `GET /analysis/genre-stats`
 - `GET /analysis/price-band-stats`
 - `GET /analysis/platform-stats`
-
-Frontend-facing API details, cursor pagination examples, and real-DB verification commands are documented in
-[`docs/API.md`](docs/API.md).
+- `GET /analysis/genre-trends`
+- `GET /analysis/price-trends`
+- `GET /analysis/topics/sentiment`
+- `GET /analysis/topics/by-genre`
+- `GET /analysis/release-year-stats`
+- `GET /games/{game_id}/review-trend`
 
 Authentication is intentionally not implemented in this project. Wishlist and notification APIs use the demo-friendly
 `X-Client-Id` header; the frontend can persist a generated client id in localStorage and send it with those requests.

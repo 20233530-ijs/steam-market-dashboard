@@ -86,10 +86,16 @@ class ApiSmokeTests(unittest.TestCase):
             "/genres",
             "/games/rankings",
             "/games/{game_id}/history",
+            "/games/{game_id}/review-trend",
             "/games/{game_id}/reviews/insights",
             "/analysis/genre-stats",
             "/analysis/price-band-stats",
             "/analysis/platform-stats",
+            "/analysis/genre-trends",
+            "/analysis/price-trends",
+            "/analysis/topics/sentiment",
+            "/analysis/topics/by-genre",
+            "/analysis/release-year-stats",
             "/analysis/trends",
             "/analysis/price-review",
             "/analysis/topics/clusters",
@@ -125,12 +131,46 @@ class ApiSmokeTests(unittest.TestCase):
         app.dependency_overrides[get_db] = override_db
         try:
             client = TestClient(app)
-            for path in ("/analysis/genre-stats", "/analysis/price-band-stats", "/analysis/platform-stats"):
+            for path in (
+                "/analysis/genre-stats",
+                "/analysis/price-band-stats",
+                "/analysis/platform-stats",
+                "/analysis/genre-trends",
+                "/analysis/price-trends",
+                "/analysis/release-year-stats",
+            ):
                 response = client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json(), {"items": []})
         finally:
             app.dependency_overrides.clear()
+
+    def test_topic_fallback_routes_return_200_with_fake_db(self):
+        fake_db = FakeConnection(rows=[])
+
+        def override_db():
+            yield fake_db
+
+        app.dependency_overrides[get_db] = override_db
+        try:
+            client = TestClient(app)
+            topic_sentiment = client.get("/analysis/topics/sentiment")
+            topics_by_genre = client.get("/analysis/topics/by-genre")
+        finally:
+            app.dependency_overrides.clear()
+
+        self.assertEqual(topic_sentiment.status_code, 200)
+        self.assertFalse(topic_sentiment.json()["topic_sentiment_available"])
+        self.assertEqual(topic_sentiment.json()["items"], [])
+        self.assertEqual(topics_by_genre.status_code, 200)
+        self.assertFalse(topics_by_genre.json()["topic_sentiment_available"])
+        self.assertEqual(topics_by_genre.json()["items"], [])
+
+    def test_wishlist_schema_includes_recent_price_metrics(self):
+        schema = app.openapi()
+        properties = schema["components"]["schemas"]["WishlistItem"]["properties"]
+
+        self.assertTrue({"price_change_30d", "lowest_price_30d", "highest_price_30d"}.issubset(properties))
 
     def test_wishlist_routes_keep_x_client_id_header_contract(self):
         schema = app.openapi()

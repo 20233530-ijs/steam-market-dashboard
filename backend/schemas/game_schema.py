@@ -89,6 +89,8 @@ class GameRankingItem(GameListItem):
 
 class WishlistItem(GameListItem):
     price_change_30d: int | None = None
+    lowest_price_30d: int | None = None
+    highest_price_30d: int | None = None
     review_change_30d: int = 0
 
 

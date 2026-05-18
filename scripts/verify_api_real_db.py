@@ -72,6 +72,11 @@ def verify_distribution(base_url: str) -> None:
 def verify_reference_endpoints(base_url: str) -> None:
     timed_get(base_url, "/genres")
     timed_get(base_url, "/analysis/trends")
+    timed_get(base_url, "/analysis/genre-trends")
+    timed_get(base_url, "/analysis/price-trends")
+    timed_get(base_url, "/analysis/topics/sentiment")
+    timed_get(base_url, "/analysis/topics/by-genre")
+    timed_get(base_url, "/analysis/release-year-stats")
     timed_get(base_url, "/analysis/price-review", {"limit": 50})
     timed_get(base_url, "/games/rankings", {"metric": "reviews", "limit": 10})
 
