@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# API keys and local config
+.env
+venv/
+config.py
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Data artifacts
+data/
+*.csv
+artifacts/
+*.sql

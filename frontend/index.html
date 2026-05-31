@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steam Game Trend Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Steam Market Analytics</p>
+        <h1>Steam Game Trend Dashboard</h1>
+      </div>
+
+      <div class="api-controls">
+        <label for="apiBaseInput">API server URL</label>
+        <div class="control-row">
+          <input id="apiBaseInput" type="url" placeholder="Enter API base URL provided for this environment" />
+          <button id="loadButton" type="button">Load Data</button>
+        </div>
+        <p id="statusMessage" class="status-message">Enter the API base URL for this environment, then load data.</p>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="card games-card">
+        <div class="card-header">
+          <h2>Game List</h2>
+          <input id="gameSearchInput" type="search" placeholder="Search by game or genre" />
+        </div>
+        <div id="gamesContainer" class="table-wrap">
+          <p class="empty-message">No game list loaded yet.</p>
+        </div>
+      </section>
+
+      <section class="card detail-card">
+        <div class="card-header">
+          <h2>Selected Game Detail</h2>
+          <span id="selectedGameBadge" class="badge">No selection</span>
+        </div>
+        <div id="gameDetailContainer" class="detail-grid">
+          <p class="empty-message">Select a game to view details.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Sentiment Ratio</h2>
+          <span id="sentimentReliability" class="badge">Reliability -</span>
+        </div>
+        <div id="sentimentContainer" class="bars">
+          <p class="empty-message">No sentiment data loaded yet.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Top Topics</h2>
+          <span class="card-note">Top 5 topics</span>
+        </div>
+        <div id="topicsContainer" class="topic-list">
+          <p class="empty-message">No topic data loaded yet.</p>
+        </div>
+      </section>
+
+      <section class="card wide-card">
+        <div class="card-header">
+          <h2>Correlation Results</h2>
+          <span class="card-note">Reliability is based on sample_size.</span>
+        </div>
+        <div id="correlationContainer" class="table-wrap">
+          <p class="empty-message">No correlation data loaded yet.</p>
+        </div>
+      </section>
+
+      <section class="card wide-card">
+        <div class="card-header">
+          <h2>Connection Log</h2>
+          <span class="card-note">API responses are also printed with console.log.</span>
+        </div>
+        <ul id="logList" class="log-list">
+          <li>Waiting.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

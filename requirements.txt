@@ -1,0 +1,17 @@
+requests
+psycopg2-binary
+python-dotenv
+SQLAlchemy
+fastapi
+pydantic
+uvicorn
+apscheduler
+pandas
+numpy
+scipy
+scikit-learn
+spacy
+gensim
+nltk
+matplotlib
+seaborn
