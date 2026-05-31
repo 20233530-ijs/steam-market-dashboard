@@ -1,20 +1,24 @@
+import os
 import requests
 import psycopg2
 from apscheduler.schedulers.blocking import BlockingScheduler
 from datetime import datetime
+from dotenv import load_dotenv
 
-API_KEY = "KEY입력"
-DB_PASSWORD = "SQL비밀번호"
+load_dotenv()
+
+API_KEY = os.getenv("API_KEY")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 def collect_data():
     print(f"데이터 수집 시작: {datetime.now()}")
-    
+
     try:
         conn = psycopg2.connect(
-            host="localhost",
-            port=5432,
-            database="postgres",
-            user="postgres",
+            host=os.getenv("DB_HOST", "localhost"),
+            port=int(os.getenv("DB_PORT", "5432")),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
             password=DB_PASSWORD
         )
         cursor = conn.cursor()
