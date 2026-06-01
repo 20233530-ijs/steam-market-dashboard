@@ -625,12 +625,24 @@ html.theme-dark .home-page-v2 {
   border-bottom: 1px solid #edf0f5;
 }
 
+/* 
+  X 버튼이 오른쪽에 있어서 텍스트가 살짝 왼쪽으로 보이는 문제를 보정한다.
+  오른쪽 X 버튼 너비만큼 왼쪽 여백을 주어 제목과 설명이 모달 전체 기준 중앙에 가깝게 보이도록 한다.
+*/
+.home-v2-modal-header > div {
+  flex: 1;
+  min-width: 0;
+  padding-left: 38px;
+  text-align: center;
+}
+
 .home-v2-modal-header h2 {
   margin: 0;
   color: #071426;
   font-size: 24px;
   font-weight: 950;
   letter-spacing: -0.04em;
+  text-align: center;
 }
 
 .home-v2-modal-header p {
@@ -640,6 +652,7 @@ html.theme-dark .home-page-v2 {
   font-weight: 750;
   line-height: 1.55;
   word-break: keep-all;
+  text-align: center;
 }
 
 .home-v2-modal-close {
@@ -952,6 +965,10 @@ html.theme-dark .home-v2-modal-close:hover {
 
   .home-v2-modal-header {
     padding: 20px 20px 14px;
+  }
+
+  .home-v2-modal-header > div {
+    padding-left: 38px;
   }
 
   .home-v2-modal-header h2 {
