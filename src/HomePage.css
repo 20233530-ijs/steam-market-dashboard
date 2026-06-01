@@ -164,6 +164,11 @@ html.theme-dark .home-page-v2 {
   cursor: pointer;
 }
 
+.home-v2-card-header button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .home-v2-card-header select {
   flex-shrink: 0;
   width: 150px;
@@ -586,6 +591,177 @@ html.theme-dark .home-page-v2 {
   margin: 0;
 }
 
+/* 인기 게임 더보기 모달 */
+.home-v2-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
+}
+
+.home-v2-top-games-modal {
+  width: min(1040px, 100%);
+  max-height: min(780px, calc(100vh - 56px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e6eaf2;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+}
+
+.home-v2-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 26px 18px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.home-v2-modal-header h2 {
+  margin: 0;
+  color: #071426;
+  font-size: 24px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.home-v2-modal-header p {
+  margin: 8px 0 0;
+  color: #617089;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+
+.home-v2-modal-close {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: 1px solid #dfe4ee;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #071426;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.home-v2-modal-close:hover {
+  background: #f4f6fb;
+}
+
+.home-v2-modal-table-wrap {
+  overflow: auto;
+  padding: 0 26px 24px;
+}
+
+.home-v2-modal-table {
+  min-width: 860px;
+}
+
+.home-v2-modal-table-head,
+.home-v2-modal-table-row {
+  display: grid;
+  grid-template-columns: 64px minmax(260px, 1.5fr) minmax(140px, 0.8fr) 90px 100px 110px;
+  align-items: center;
+  gap: 14px;
+}
+
+.home-v2-modal-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 16px 0 12px;
+  border-bottom: 1px solid #edf0f5;
+  background: #ffffff;
+  color: #617089;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.home-v2-modal-table-row {
+  min-height: 58px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f2f6;
+  color: #071426;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.home-v2-modal-table-row:last-child {
+  border-bottom: 0;
+}
+
+.home-v2-modal-rank {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #edf0ff;
+  color: #5d63f1;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.home-v2-modal-game-cell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.home-v2-modal-game-cell strong {
+  overflow: hidden;
+  color: #071426;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-v2-modal-game-thumb {
+  width: 72px;
+  height: 40px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: #edf0ff;
+}
+
+.home-v2-modal-game-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-v2-modal-game-thumb span {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #5d63f1;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.home-v2-modal-positive {
+  color: #1f9d60;
+  font-size: 13px;
+  font-weight: 950;
+}
+
 /* 다크모드 대응 */
 html.theme-dark .home-v2-header h1,
 html.theme-dark .home-v2-card-header h2,
@@ -640,6 +816,42 @@ html.theme-dark .home-v2-rate-cell div {
 
 html.theme-dark .home-v2-insight-item p {
   color: #cbd5e1;
+}
+
+html.theme-dark .home-v2-top-games-modal {
+  border-color: #334155;
+  background: #111827;
+}
+
+html.theme-dark .home-v2-modal-header,
+html.theme-dark .home-v2-modal-table-head,
+html.theme-dark .home-v2-modal-table-row {
+  border-color: #334155;
+}
+
+html.theme-dark .home-v2-modal-header h2,
+html.theme-dark .home-v2-modal-close,
+html.theme-dark .home-v2-modal-table-row,
+html.theme-dark .home-v2-modal-game-cell strong {
+  color: #f9fafb;
+}
+
+html.theme-dark .home-v2-modal-header p,
+html.theme-dark .home-v2-modal-table-head {
+  color: #cbd5e1;
+}
+
+html.theme-dark .home-v2-modal-close,
+html.theme-dark .home-v2-modal-table-head {
+  background: #111827;
+}
+
+html.theme-dark .home-v2-modal-close {
+  border-color: #475569;
+}
+
+html.theme-dark .home-v2-modal-close:hover {
+  background: #1f2937;
 }
 
 /* 1240px 제한 유지: 넓은 화면에서도 1160px로 줄이지 않음 */
@@ -726,5 +938,27 @@ html.theme-dark .home-v2-insight-item p {
 
   .home-v2-price-sentiment-row p {
     text-align: left;
+  }
+
+  .home-v2-modal-backdrop {
+    align-items: stretch;
+    padding: 14px;
+  }
+
+  .home-v2-top-games-modal {
+    max-height: calc(100vh - 28px);
+    border-radius: 18px;
+  }
+
+  .home-v2-modal-header {
+    padding: 20px 20px 14px;
+  }
+
+  .home-v2-modal-header h2 {
+    font-size: 20px;
+  }
+
+  .home-v2-modal-table-wrap {
+    padding: 0 20px 20px;
   }
 }

@@ -104,6 +104,7 @@ function HomePage() {
   const [correlations, setCorrelations] = useState<CorrelationResult[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
+  const [isTopGamesModalOpen, setIsTopGamesModalOpen] = useState(false)
 
   useEffect(() => {
     async function loadHomeData() {
@@ -160,13 +161,39 @@ function HomePage() {
     loadHomeData()
   }, [])
 
+  useEffect(() => {
+    if (!isTopGamesModalOpen) {
+      return
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsTopGamesModalOpen(false)
+      }
+    }
+
+    const originalOverflow = document.body.style.overflow
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = originalOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isTopGamesModalOpen])
+
   const homeGameSource = useMemo(() => {
     return allGames.length > 0 ? allGames : rankingGames
   }, [allGames, rankingGames])
 
+  const allTopGames = useMemo(() => {
+    return normalizeTopGames(homeGameSource)
+  }, [homeGameSource])
+
   const topGames = useMemo(() => {
-    return normalizeTopGames(rankingGames).slice(0, 10)
-  }, [rankingGames])
+    return allTopGames.slice(0, 10)
+  }, [allTopGames])
 
   const genres = useMemo(() => {
     return normalizeGenres(genreStats, homeGameSource).slice(0, 8)
@@ -260,7 +287,13 @@ function HomePage() {
               <p>리뷰 수와 긍정 비율을 기준으로 상위 게임을 확인합니다.</p>
             </div>
 
-            <button type="button">더보기 →</button>
+            <button
+              type="button"
+              onClick={() => setIsTopGamesModalOpen(true)}
+              disabled={allTopGames.length === 0}
+            >
+              더보기 →
+            </button>
           </div>
 
           <div className="home-v2-table">
@@ -417,6 +450,82 @@ function HomePage() {
           ))}
         </div>
       </section>
+
+      {isTopGamesModalOpen && (
+        <div
+          className="home-v2-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsTopGamesModalOpen(false)
+            }
+          }}
+        >
+          <section
+            className="home-v2-top-games-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="top-games-modal-title"
+          >
+            <div className="home-v2-modal-header">
+              <div>
+                <h2 id="top-games-modal-title">인기 게임 전체 목록</h2>
+                <p>
+                  리뷰 수를 기준으로 정렬된 인기 게임 목록입니다. 총{' '}
+                  {allTopGames.length.toLocaleString('ko-KR')}개 게임을 확인할 수 있습니다.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="home-v2-modal-close"
+                onClick={() => setIsTopGamesModalOpen(false)}
+                aria-label="인기 게임 전체 목록 닫기"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="home-v2-modal-table-wrap">
+              <div className="home-v2-modal-table">
+                <div className="home-v2-modal-table-head">
+                  <span>순위</span>
+                  <span>게임</span>
+                  <span>장르</span>
+                  <span>가격</span>
+                  <span>긍정 비율</span>
+                  <span>리뷰 수</span>
+                </div>
+
+                {allTopGames.map((game) => (
+                  <div className="home-v2-modal-table-row" key={game.id}>
+                    <span className="home-v2-modal-rank">{game.rank}</span>
+
+                    <div className="home-v2-modal-game-cell">
+                      <div className="home-v2-modal-game-thumb">
+                        {game.image ? (
+                          <img src={game.image} alt={`${game.name} 이미지`} />
+                        ) : (
+                          <span>{game.name.slice(0, 2)}</span>
+                        )}
+                      </div>
+
+                      <strong>{game.name}</strong>
+                    </div>
+
+                    <span>{game.genre}</span>
+                    <span>{game.price}</span>
+                    <strong className="home-v2-modal-positive">
+                      {game.positiveRate.toFixed(1)}%
+                    </strong>
+                    <span>{formatNumber(game.reviewCount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   )
 }
