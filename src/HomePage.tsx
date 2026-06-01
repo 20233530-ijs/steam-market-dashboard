@@ -290,7 +290,7 @@ function HomePage() {
             <button
               type="button"
               onClick={() => setIsTopGamesModalOpen(true)}
-              disabled={allTopGames.length === 0}
+              disabled={topGames.length === 0}
             >
               더보기 →
             </button>
@@ -469,10 +469,10 @@ function HomePage() {
           >
             <div className="home-v2-modal-header">
               <div>
-                <h2 id="top-games-modal-title">인기 게임 전체 목록</h2>
+                <h2 id="top-games-modal-title">인기 게임 TOP 10</h2>
                 <p>
-                  리뷰 수를 기준으로 정렬된 인기 게임 목록입니다. 총{' '}
-                  {allTopGames.length.toLocaleString('ko-KR')}개 게임을 확인할 수 있습니다.
+                  홈 화면에 표시된 인기 게임 10개를 더 자세히 확인할 수 있습니다.
+                  리뷰 수와 긍정 비율을 함께 표시합니다.
                 </p>
               </div>
 
@@ -480,7 +480,7 @@ function HomePage() {
                 type="button"
                 className="home-v2-modal-close"
                 onClick={() => setIsTopGamesModalOpen(false)}
-                aria-label="인기 게임 전체 목록 닫기"
+                aria-label="인기 게임 TOP 10 닫기"
               >
                 ×
               </button>
@@ -497,7 +497,7 @@ function HomePage() {
                   <span>리뷰 수</span>
                 </div>
 
-                {allTopGames.map((game) => (
+                {topGames.map((game) => (
                   <div className="home-v2-modal-table-row" key={game.id}>
                     <span className="home-v2-modal-rank">{game.rank}</span>
 
