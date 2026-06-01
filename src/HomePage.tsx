@@ -183,41 +183,53 @@ function HomePage() {
     }
   }, [isTopGamesModalOpen])
 
-  const homeGameSource = useMemo(() => {
+  /*
+   * 인기 게임 TOP 10은 랭킹 API 기준을 우선 사용한다.
+   * /games 전체 목록을 기준으로 다시 정렬하면 리뷰 수 기준이 달라져 숫자 차이가 커질 수 있기 때문이다.
+   */
+  const topGameSource = useMemo(() => {
+    return rankingGames.length > 0 ? rankingGames : allGames
+  }, [rankingGames, allGames])
+
+  /*
+   * 홈의 가격대별 반응 비교와 장르 fallback 계산은 전체 게임 목록을 사용한다.
+   * /games 전체 목록이 없을 때만 rankingGames를 보조 데이터로 사용한다.
+   */
+  const marketGameSource = useMemo(() => {
     return allGames.length > 0 ? allGames : rankingGames
   }, [allGames, rankingGames])
 
   const allTopGames = useMemo(() => {
-    return normalizeTopGames(homeGameSource)
-  }, [homeGameSource])
+    return normalizeTopGames(topGameSource)
+  }, [topGameSource])
 
   const topGames = useMemo(() => {
     return allTopGames.slice(0, 10)
   }, [allTopGames])
 
   const genres = useMemo(() => {
-    return normalizeGenres(genreStats, homeGameSource).slice(0, 8)
-  }, [genreStats, homeGameSource])
+    return normalizeGenres(genreStats, marketGameSource).slice(0, 8)
+  }, [genreStats, marketGameSource])
 
   const priceSentimentBands = useMemo(() => {
-    return normalizePriceSentimentBands(homeGameSource)
-  }, [homeGameSource])
+    return normalizePriceSentimentBands(marketGameSource)
+  }, [marketGameSource])
 
   const totalGames =
-    readNumber(summary, ['total_games', 'totalGames', 'game_count']) || homeGameSource.length
+    readNumber(summary, ['total_games', 'totalGames', 'game_count']) || marketGameSource.length
 
   const totalReviews =
     readNumber(summary, ['total_reviews', 'totalReviews', 'review_count']) ||
-    homeGameSource.reduce((sum, game) => sum + getReliableReviewCount(game), 0)
+    marketGameSource.reduce((sum, game) => sum + getReliableReviewCount(game), 0)
 
   const averagePositiveRate =
     normalizeRatio(
       readField(summary, ['average_positive_rate', 'positive_rate', 'positiveRate']),
-    ) || calculateAveragePositiveRate(homeGameSource)
+    ) || calculateAveragePositiveRate(marketGameSource)
 
   const averagePrice =
     normalizePrice(readField(summary, ['average_price', 'average_price_usd'])) ||
-    calculateAveragePrice(homeGameSource)
+    calculateAveragePrice(marketGameSource)
 
   const insights = useMemo(() => {
     return createInsights({
